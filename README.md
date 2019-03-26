@@ -3,18 +3,18 @@ In-Shop Fashion Image Retrieval with Siamese Capsule Networks
 
 ## TODO LIST
 
-- [+] Literature search for clothing retrieval tasks
-- [+] Getting permission to dataset
-- [+] Siamese directory iterator implementation
-- [+] Siamese capsules implementation
-- [+] Train/Gallery/Query 
-- [+] Class partitioning
-- [] Accuracy for Siamese Nets
-- [] One-shot task implementation
-- [] Architecture design
-- [] Reconstruction on testing
-- [] Literature search for related works
-- [] Starting the training process
+- [x] Literature search for clothing retrieval tasks
+- [x] Getting permission to dataset
+- [x] Siamese directory iterator implementation
+- [x] Siamese capsules implementation
+- [x] Train/Gallery/Query 
+- [x] Class partitioning
+- [ ] Accuracy for Siamese Nets
+- [ ] One-shot task implementation
+- [ ] Architecture design
+- [ ] Reconstruction on testing
+- [ ] Literature search for related works
+- [ ] Starting the training process
 
 ## Project Details
 
