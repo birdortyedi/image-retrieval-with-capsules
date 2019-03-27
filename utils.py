@@ -5,17 +5,13 @@ from SiameseDirectoryIterator import SiameseDirectoryIterator
 
 
 def siamese_accuracy(y_true, y_pred):
-    # TODO
-    margin = 5.0
-    return K.mean(K.not_equal(y_true, K.cast(K.greater_equal(K.exp(-K.sum(K.abs(y_pred), axis=1, keepdims=True)),
-                                                             margin), dtype=K.floatx())))
+    margin = 0.5
+    return K.mean(K.not_equal(y_true, K.cast(K.greater_equal(y_pred, margin), dtype=K.floatx())))
 
 
 def contrasive_margin_loss(y_true, y_pred):
-    margin = 5.0
-
-    return K.mean((1 - y_true) * 0.5 * K.exp(-K.sum(K.abs(y_pred), axis=1, keepdims=True)) +
-                  0.5 * y_true * K.maximum(margin - K.exp(-K.sum(K.abs(y_pred), axis=1, keepdims=True)), 0))
+    margin = 0.5
+    return K.mean((1 - y_true) * 0.5 * y_pred + 0.5 * y_true * K.maximum(margin - y_pred, 0))
 
 
 def squash(activations, axis=-1):
@@ -23,6 +19,10 @@ def squash(activations, axis=-1):
             (1 + K.sum(K.square(activations), axis, keepdims=True)) / \
             K.sqrt(K.sum(K.square(activations), axis, keepdims=True) + K.epsilon())
     return scale * activations
+
+
+def manhattan_dist(x):
+    return K.sum(K.abs(x[0]-x[1]), axis=1, keepdims=True)
 
 
 def custom_generator(iterator, testing=True):

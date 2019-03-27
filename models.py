@@ -1,7 +1,7 @@
 from keras import models, layers
 from keras.utils import multi_gpu_model
 from layers import Length, Mask, FashionCaps
-from utils import squash
+from utils import squash, manhattan_dist
 
 
 class MultiGPUNet(models.Model):
@@ -45,8 +45,8 @@ def FashionSiameseCapsNet(input_shape):
     encoded_1 = siamese_caps_net(x1)
     encoded_2 = siamese_caps_net(x2)
 
-    out_caps_1 = Length(name='out_caps_1')(encoded_1)
-    out_caps_2 = Length(name='out_caps_2')(encoded_2)
+    # out_caps_1 = Length(name='out_caps_1')(encoded_1)
+    # out_caps_2 = Length(name='out_caps_2')(encoded_2)
 
     # Mask the output of FashionCapsNet
     y = layers.Input(shape=(1,))
@@ -57,7 +57,7 @@ def FashionSiameseCapsNet(input_shape):
 
     # Transpose-convolutional decoder network for reconstruction
     decoder = models.Sequential(name='decoder')
-    decoder.add(layers.Dense(8*8*256, activation='relu', input_dim=32*8))
+    decoder.add(layers.Dense(8*8*256, activation='relu', input_dim=256))
     decoder.add(layers.Reshape((8, 8, 256)))
     decoder.add(layers.Conv2DTranspose(256, kernel_size=9, strides=1, padding='same'))
     decoder.add(layers.BatchNormalization(axis=-1))
@@ -82,7 +82,14 @@ def FashionSiameseCapsNet(input_shape):
     decoded_eval_1 = decoder(masked_1)
     decoded_eval_2 = decoder(masked_2)
 
-    out = layers.Subtract(name="capsnet")([out_caps_1, out_caps_2])
+    length_layer = Length(name='out_caps')
+    fc = layers.Dense(units=128, name='fc')
+
+    out_1 = length_layer(encoded_1)
+    out_2 = length_layer(encoded_2)
+    out_1 = fc(out_1)
+    out_2 = fc(out_2)
+    out = layers.Lambda(manhattan_dist, name="capsnet")([out_1, out_2])
 
     train_model = models.Model(inputs=[x1, x2, y], outputs=[out, decoded_train_1, decoded_train_2])
     eval_model = models.Model(inputs=[x1, x2], outputs=[out, decoded_eval_1, decoded_eval_2])

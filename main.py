@@ -7,6 +7,8 @@ from utils import custom_generator, get_iterator, contrasive_margin_loss, siames
 
 
 def train(model, args):
+    # TODO
+    # Convert it to one-shot task!!
     # Define callbacks
     log = callbacks.CSVLogger(args.save_dir + '/log.csv', append=True)
     tb = callbacks.TensorBoard(log_dir=args.save_dir + '/tensorboard-logs',
