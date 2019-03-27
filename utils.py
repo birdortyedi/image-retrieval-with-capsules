@@ -41,8 +41,10 @@ def custom_generator(iterator, testing=True):
 def get_iterator(file_path, input_size=256,
                  shift_fraction=0., h_flip=False, zca_whit=False, rot_range=0.,
                  bright_range=0., shear_range=0., zoom_range=0., subset="train"):
+    # TODO
+    # re-write it for one shot task!
 
-    file_path = os.path.join(file_path, subset)
+    file_path = os.path.join(file_path, subset) # PROBLEM IS HERE !!! WE HAVE TWO FOLDERS TO READ!!! 
 
     if not os.path.exists(file_path):
         os.makedirs(file_path)
@@ -57,8 +59,9 @@ def get_iterator(file_path, input_size=256,
                                             shear_range=shear_range,
                                             zoom_range=zoom_range,
                                             rescale=1./255)
+        t_iterator = SiameseDirectoryIterator(file_path, data_gen, target_size=(input_size, input_size))
     else:
         data_gen = image.ImageDataGenerator(rescale=1./255)
+        t_iterator = SiameseDirectoryIterator(file_path, data_gen, target_size=(input_size, input_size), testing=True)
 
-    t_iterator = SiameseDirectoryIterator(file_path, data_gen, target_size=(input_size, input_size))
     return t_iterator

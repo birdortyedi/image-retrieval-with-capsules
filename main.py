@@ -1,4 +1,7 @@
 import os
+import time
+import numpy as np
+from tqdm import tqdm
 from keras import optimizers, callbacks
 from keras import backend as K
 from config import get_arguments
@@ -6,50 +9,62 @@ from models import FashionSiameseCapsNet, MultiGPUNet
 from utils import custom_generator, get_iterator, contrasive_margin_loss, siamese_accuracy
 
 
+def make_one_shot(model, N, k):
+    one_shot_generator = custom_generator(get_iterator(args.filepath, args.input_size, args.shift_fraction,
+                                                       args.hor_flip, args.whitening, args.rotation_range,
+                                                       args.brightness_range, args.shear_range, args.zoom_range,
+                                                       subset="query"),
+                                          testing=args.testing)
+    correct_preds = 0
+    print("Evaluating model on {} random {} way one-shot learning tasks...\n".format(k, N))
+
+    for i in range(k):
+        inputs, targets = next(one_shot_generator)
+        probs = model.predict(inputs)  # TODO HERE
+        # if np.argmax(probs) == np.argmax(targets):
+        #     correct_preds += 1
+
+    print("Got an average of {:2.2f}% {} way one-shot learning accuracy \n".format((100.0 * correct_preds / k), N))
+    return correct_preds / k
+
+
 def train(model, args):
-    # TODO
-    # Convert it to one-shot task!!
-    # Define callbacks
-    log = callbacks.CSVLogger(args.save_dir + '/log.csv', append=True)
-    tb = callbacks.TensorBoard(log_dir=args.save_dir + '/tensorboard-logs',
-                               batch_size=args.batch_size, histogram_freq=int(args.debug))
-    lr_decay = callbacks.LearningRateScheduler(schedule=lambda epoch: args.lr * (args.lr_decay ** epoch))
-    checkpoint = callbacks.ModelCheckpoint(args.save_dir + '/weights-{epoch:02d}.h5',
-                                           monitor='val_capsnet_siamese_accuracy', save_best_only=True,
-                                           save_weights_only=True, verbose=args.verbose)
-    early_stopper = callbacks.EarlyStopping(monitor='val_capsnet_loss', patience=args.patience, verbose=args.verbose)
+    best = -1
+    step = int(25882 / args.batch_size)
 
     # Compile the model
     model.compile(optimizer=optimizers.Adam(lr=args.lr, amsgrad=True),
                   loss=[contrasive_margin_loss, 'mse', 'mse'],
-                  loss_weights=[1., args.lam_recon, args.lam_recon],
-                  metrics={'capsnet': [siamese_accuracy]})
+                  loss_weights=[1., args.lam_recon, args.lam_recon])
 
-    # Start training using custom generator
-    model.fit_generator(generator=custom_generator(get_iterator(args.filepath,
-                                                                args.input_size,
-                                                                args.shift_fraction,
-                                                                args.hor_flip,
-                                                                args.whitening,
-                                                                args.rotation_range,
-                                                                args.brightness_range,
-                                                                args.shear_range,
-                                                                args.zoom_range,
-                                                                subset="train"),
-                                                   testing=args.testing),
-                        steps_per_epoch=int(25882 / args.batch_size),
-                        epochs=args.epochs,
-                        validation_data=custom_generator(get_iterator(args.filepath, args.input_size,
-                                                                      subset="gallery"),
-                                                         testing=args.testing),
-                        validation_steps=int(12612 / args.batch_size),
-                        callbacks=[log, tb, checkpoint, lr_decay, early_stopper],
-                        initial_epoch=args.initial_epoch)
+    train_generator = custom_generator(get_iterator(args.filepath, args.input_size, args.shift_fraction, args.hor_flip,
+                                                    args.whitening, args.rotation_range, args.brightness_range,
+                                                    args.shear_range, args.zoom_range, subset="train"),
+                                       testing=args.testing)
 
-    # Save the model
+    for i in range(args.epochs):
+        print("Epoch (" + str(i) + "/" + str(args.epochs) + "):")
+        t_start = time.time()
+        for _ in tqdm(range(step), ncols=50):
+            x, y = next(train_generator)
+            loss = model.train_on_batch(x, y)
+
+            print("Total loss: {:.4f} \t"
+                  "Contrasive Margin Loss: {:.4f} \t"
+                  "Reconstruction Loss for Pair 1: {:.4f} \t"
+                  "Reconstruction Loss for Pair 2: {:.4f} \t".format(loss[0], loss[1], loss[2], loss[3]) + "\r", end="")
+
+        print("Epoch (" + str(i) + "/" + str(args.epochs) + ") completed in " + str(time.time()-t_start) + " secs.")
+        val_acc = make_one_shot(model, N=25, k=21311)
+        if val_acc >= best:
+            print("\tCurrent best: {:2.4f}, previous best: {:2.4f}".format(val_acc, best))
+            print("\tSaving weights to {} \n".format(args.save_dir))
+            model.save_weights(args.save_dir)
+            best = val_acc
+
     model_path = '/t_model.h5'
     model.save(args.save_dir + model_path)
-    print('The model saved to \'%s' + model_path + '\'' % args.save_dir)
+    print('The model file saved to \'%s' + model_path + '\'' % args.save_dir)
 
 
 def test(model, args):
@@ -59,11 +74,14 @@ def test(model, args):
                   # loss_weights=[1., args.lam_recon],
                   metrics={'capsnet': 'accuracy'})
 
-    # Evaluate the model using custom generator
-    scores = model.evaluate_generator(generator=custom_generator(get_iterator(args.filepath,
-                                                                              subset="test")),
-                                      steps=int(40000 / args.batch_size))
-    print(scores)
+    # TODO
+    # Decide that do we need that method?
+
+    # # Evaluate the model using custom generator
+    # scores = model.evaluate_generator(generator=custom_generator(get_iterator(args.filepath,
+    #                                                                           subset="test")),
+    #                                   steps=int(40000 / args.batch_size))
+    # print(scores)
 
     # TODO
     # Reconstruct batch of images

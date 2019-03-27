@@ -13,9 +13,10 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
                  target_size=(256, 256), color_mode: str = 'rgb',
                  classes=None, class_mode: str = 'categorical',
                  batch_size: int = 32, shuffle: bool = True, seed=None, data_format=None,
-                 follow_links: bool = False):
+                 follow_links: bool = False, testing: bool = False):
         super().__init__(directory, image_data_generator, target_size, color_mode, classes, class_mode, batch_size,
                          shuffle, seed, data_format, follow_links)
+        self.testing = testing
         self.bounding_boxes = bounding_boxes
         self.landmark_info = landmark_info
         self.attr_info = attr_info
@@ -28,11 +29,7 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
         # Returns
             The next batch.
         """
-        with self.lock:
-            index_array = next(self.index_generator)
 
-        # The transformation of images is not under thread lock
-        # so it can be done in parallel
         batch_x = np.zeros((self.batch_size,) + self.image_shape, dtype=K.floatx())
         locations = np.zeros((len(batch_x),) + (self.num_bbox,), dtype=K.floatx())
         landmarks = np.zeros((len(batch_x),) + (self.num_landmarks,), dtype=K.floatx())
@@ -42,12 +39,19 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
         pairs = [np.zeros((self.batch_size, self.target_size[0], self.target_size[1], 3)) for _ in range(2)]
         # initialize vector for the targets, and make one half of it '1's, so 2nd half of batch has same class
         targets = np.zeros((self.batch_size,))
-        targets[self.batch_size // 2:] = 1
+
+        if not self.testing:
+            targets[self.batch_size // 2:] = 1
+        else:
+            targets[-1] = 1
+        idx_1 = rng.randint(0, self.samples)
+
         for i in range(self.batch_size):
-            idx_1 = rng.randint(0, self.samples)
+            if not self.testing:
+                idx_1 = rng.randint(0, self.samples)
             fname_1 = self.filenames[idx_1]
-            # print("Pairs:")
-            # print("Category: " + str(self.classes[idx_1]) + ", Filename: " + str(fname_1))
+            print("\nPairs:")
+            print("Category: " + str(self.classes[idx_1]) + ", Filename: " + str(fname_1))
             img_1 = image.load_img(os.path.join(self.directory, fname_1),
                                    grayscale=self.color_mode == 'grayscale',
                                    target_size=self.target_size)
@@ -59,21 +63,31 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
 
             idx_2 = rng.randint(0, self.samples)
             # pick images of same class for 1st half, different for 2nd
-            if i >= self.batch_size // 2:
-                # print("Same class")
-                while self.classes[idx_2] != self.classes[idx_1]:
-                    idx_2 = rng.randint(0, self.samples)
-                # category_2 = category
-            else:
-                # print("Different class")
-                # add a random number to the category modulo n classes to ensure 2nd image has
-                # ..different category
-                while self.classes[idx_2] == self.classes[idx_1]:
-                    idx_2 = rng.randint(0, self.samples)
+            if not self.testing:
+                if i >= self.batch_size // 2:
+                    print("Same class")
+                    while self.classes[idx_2] != self.classes[idx_1]:
+                        idx_2 = rng.randint(0, self.samples)
+                    # category_2 = category
+                else:
+                    print("Different class")
+                    # add a random number to the category modulo n classes to ensure 2nd image has
+                    # ..different category
+                    while self.classes[idx_2] == self.classes[idx_1]:
+                        idx_2 = rng.randint(0, self.samples)
                 # category_2 = (category + rng.randint(1, self.num_classes)) % self.num_classes
+            else:
+                if i == self.batch_size-1:
+                    print("Same class")
+                    while self.classes[idx_2] != self.classes[idx_1]:
+                        idx_2 = rng.randint(0, self.samples)
+                else:
+                    print("Different class")
+                    while self.classes[idx_2] == self.classes[idx_1]:
+                        idx_2 = rng.randint(0, self.samples)
 
             fname_2 = self.filenames[idx_2]
-            # print("Category: " + str(self.classes[idx_2]) + ", Filename: " + str(fname_2) + "\n")
+            print("Category: " + str(self.classes[idx_2]) + ", Filename: " + str(fname_2) + "\n")
             img_2 = image.load_img(os.path.join(self.directory, fname_2),
                                    grayscale=self.color_mode == 'grayscale',
                                    target_size=self.target_size)
@@ -97,7 +111,7 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
         statements = [True, self.bounding_boxes is not None,
                       self.landmark_info is not None, self.attr_info is not None]
 
-        y = np.asarray([x for x, y in zip(y, statements) if y], dtype=K.floatx()).reshape((32,))
+        y = np.asarray([x for x, y in zip(y, statements) if y], dtype=K.floatx()).reshape((self.batch_size,))
 
         if self.shuffle:
             negs = pairs[0]
