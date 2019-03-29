@@ -4,25 +4,30 @@ import numpy as np
 from tqdm import tqdm
 from keras import optimizers, callbacks
 from keras import backend as K
+from keras.preprocessing import image
 from config import get_arguments
 from models import FashionSiameseCapsNet, MultiGPUNet
-from utils import custom_generator, get_iterator, contrasive_margin_loss, siamese_accuracy
+from utils import custom_generator, get_iterator, contrastive_margin_loss, create_one_shot_task
 
 
-def make_one_shot(model, N, k):
-    one_shot_generator = custom_generator(get_iterator(args.filepath, args.input_size, args.shift_fraction,
-                                                       args.hor_flip, args.whitening, args.rotation_range,
-                                                       args.brightness_range, args.shear_range, args.zoom_range,
-                                                       subset="query"),
-                                          testing=args.testing)
+def make_one_shot(model, file_path, subset, input_size, N, k):
+    file_path_1 = os.path.join(file_path, subset[0])
+    file_path_2 = os.path.join(file_path, subset[1])
+
+    data_gen = image.ImageDataGenerator(rescale=1. / 255)
+
+    it_1 = image.DirectoryIterator(directory=file_path_1, image_data_generator=data_gen,
+                                   target_size=(input_size, input_size), batch_size=1)
+    it_2 = image.DirectoryIterator(directory=file_path_2, image_data_generator=data_gen,
+                                   target_size=(input_size, input_size), batch_size=1)
     correct_preds = 0
     print("Evaluating model on {} random {} way one-shot learning tasks...\n".format(k, N))
 
     for i in range(k):
-        inputs, targets = next(one_shot_generator)
-        probs = model.predict(inputs)  # TODO HERE
-        # if np.argmax(probs) == np.argmax(targets):
-        #     correct_preds += 1
+        pairs, targets = create_one_shot_task(it_1=it_1, it_2=it_2, input_size=input_size, N=N)
+        probs = model.predict([pairs[0], pairs[1], targets])
+        if np.argmax(np.asarray(probs[0])) == np.argmax(targets):
+            correct_preds += 1
 
     print("Got an average of {:2.2f}% {} way one-shot learning accuracy \n".format((100.0 * correct_preds / k), N))
     return correct_preds / k
@@ -34,12 +39,13 @@ def train(model, args):
 
     # Compile the model
     model.compile(optimizer=optimizers.Adam(lr=args.lr, amsgrad=True),
-                  loss=[contrasive_margin_loss, 'mse', 'mse'],
+                  loss=["binary_crossentropy", 'mse', 'mse'],
                   loss_weights=[1., args.lam_recon, args.lam_recon])
 
-    train_generator = custom_generator(get_iterator(args.filepath, args.input_size, args.shift_fraction, args.hor_flip,
-                                                    args.whitening, args.rotation_range, args.brightness_range,
-                                                    args.shear_range, args.zoom_range, subset="train"),
+    train_generator = custom_generator(get_iterator(os.path.join(args.filepath, "train"), args.input_size,
+                                                    args.shift_fraction, args.hor_flip, args.whitening,
+                                                    args.rotation_range, args.brightness_range, args.shear_range,
+                                                    args.zoom_range),
                                        testing=args.testing)
 
     for i in range(args.epochs):
@@ -55,11 +61,12 @@ def train(model, args):
                   "Reconstruction Loss for Pair 2: {:.4f} \t".format(loss[0], loss[1], loss[2], loss[3]) + "\r", end="")
 
         print("Epoch (" + str(i) + "/" + str(args.epochs) + ") completed in " + str(time.time()-t_start) + " secs.")
-        val_acc = make_one_shot(model, N=25, k=21311)
+        val_acc = make_one_shot(model, file_path=args.filepath, subset=["query", "gallery"],
+                                input_size=args.input_size, N=9, k=20)
         if val_acc >= best:
             print("\tCurrent best: {:2.4f}, previous best: {:2.4f}".format(val_acc, best))
             print("\tSaving weights to {} \n".format(args.save_dir))
-            model.save_weights(args.save_dir)
+            model.save_weights(args.save_dir + "weights-" + str(i) + ".h5")
             best = val_acc
 
     model_path = '/t_model.h5'
@@ -70,7 +77,7 @@ def train(model, args):
 def test(model, args):
     # Compile the model
     model.compile(optimizer=optimizers.Adam(lr=args.lr),
-                  loss=[contrasive_margin_loss],
+                  loss=[contrastive_margin_loss],
                   # loss_weights=[1., args.lam_recon],
                   metrics={'capsnet': 'accuracy'})
 

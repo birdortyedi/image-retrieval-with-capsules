@@ -89,7 +89,8 @@ def FashionSiameseCapsNet(input_shape):
     out_2 = length_layer(encoded_2)
     out_1 = fc(out_1)
     out_2 = fc(out_2)
-    out = layers.Lambda(manhattan_dist, name="capsnet")([out_1, out_2])
+    out = layers.Lambda(manhattan_dist, name="distance")([out_1, out_2])
+    out = layers.Dense(units=1, activation="sigmoid", name="capsnet")(out)
 
     train_model = models.Model(inputs=[x1, x2, y], outputs=[out, decoded_train_1, decoded_train_2])
     eval_model = models.Model(inputs=[x1, x2], outputs=[out, decoded_eval_1, decoded_eval_2])
