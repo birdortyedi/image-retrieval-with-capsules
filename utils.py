@@ -1,14 +1,8 @@
-import os
 import numpy as np
 from random import shuffle
 from keras import backend as K
 from keras.preprocessing import image
 from SiameseDirectoryIterator import SiameseDirectoryIterator
-
-
-def siamese_accuracy(y_true, y_pred):
-    margin = 0.5
-    return K.mean(K.not_equal(y_true, K.cast(K.greater_equal(y_pred, margin), dtype=K.floatx())))
 
 
 def contrastive_margin_loss(y_true, y_pred):
@@ -23,23 +17,13 @@ def squash(activations, axis=-1):
     return scale * activations
 
 
-def manhattan_dist(x):
-    return K.sum(K.abs(x[0]-x[1]), axis=1, keepdims=True)
+def custom_generator(iterator):
+    while True:
+        pairs_batch, y_batch = iterator.next()
+        yield ([pairs_batch[0], pairs_batch[1]], [y_batch])
 
 
-def custom_generator(iterator, testing=True):
-    if testing:
-        while True:
-            pairs_batch, y_batch = iterator.next()
-            yield ([pairs_batch[0], pairs_batch[1]],
-                   [y_batch, pairs_batch[0], pairs_batch[1]])
-    else:
-        while True:
-            pairs_batch, y_batch = iterator.next()
-            yield ([pairs_batch[0], pairs_batch[1], y_batch],
-                   [y_batch, pairs_batch[0], pairs_batch[1]])
-
-
+# TODO
 def create_one_shot_task(it_1, it_2, input_size, N):
     pairs = [np.zeros((N, input_size, input_size, 3)) for _ in range(2)]
     targets = np.zeros((N,))

@@ -1,7 +1,29 @@
-from keras import layers, initializers
 from keras import backend as K
+from keras import layers, initializers
 from utils import squash
 import tensorflow as tf
+
+
+def conv_bn_block(inputs, filters, k_size, stride, padding, name):
+    out = layers.Conv2D(filters=filters, kernel_size=k_size, strides=stride, padding=padding, name=name)(inputs)
+    out = layers.BatchNormalization()(out)
+    return layers.LeakyReLU()(out)
+
+
+def primary_capsule(inputs, dim_capsule, name, n_channels=32, kernel_size=9, strides=2, padding="same"):
+    inputs = layers.Conv2D(filters=dim_capsule*n_channels, kernel_size=kernel_size, strides=strides, padding=padding,
+                           name=name+'_conv')(inputs)
+    inputs = layers.Reshape(target_shape=[-1, dim_capsule], name=name+'_reshape')(inputs)
+    return layers.Lambda(squash, name=name+'_squash')(inputs)
+
+
+def siamese_capsule_model(inputs):
+    out = conv_bn_block(inputs, filters=64, k_size=9, stride=1, padding="valid", name="conv_block_1")
+    out = conv_bn_block(out, filters=128, k_size=7, stride=2, padding="valid", name="conv_block_2")
+    out = conv_bn_block(out, filters=128, k_size=5, stride=2, padding="valid", name="conv_block_3")
+    out = primary_capsule(out, dim_capsule=16, name="primarycaps")
+    out = FashionCaps(num_capsule=1, dim_capsule=128, routings=3, name="fashioncaps")(out)
+    return layers.Flatten()(out)
 
 
 class Length(layers.Layer):
@@ -34,21 +56,6 @@ class Mask(layers.Layer):
 
     def get_config(self):
         return super(Mask, self).get_config()
-
-
-def Conv_Block(x, filters, kernel_size, strides=1, padding='valid', name='conv_block'):
-    # Stacked-convolutional layer
-    out = layers.Conv2D(int(filters), kernel_size, strides, padding, name)(x)
-    out = layers.BatchNormalization()(out)
-    out = layers.LeakyReLU()(out)
-    return out
-
-
-def PrimaryCaps(inputs, dim_capsule, n_channels=32, kernel_size=9, strides=2, padding="same"):
-    inputs = layers.Conv2D(filters=dim_capsule*n_channels, kernel_size=kernel_size, strides=strides, padding=padding,
-                           name='primarycap_conv2d')(inputs)
-    inputs = layers.Reshape(target_shape=[-1, dim_capsule], name='primarycap_reshape')(inputs)
-    return layers.Lambda(squash, name='primarycap_squash')(inputs)
 
 
 class FashionCaps(layers.Layer):
