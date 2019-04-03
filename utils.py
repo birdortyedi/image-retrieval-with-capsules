@@ -6,8 +6,8 @@ from SiameseDirectoryIterator import SiameseDirectoryIterator
 
 
 def contrastive_margin_loss(y_true, y_pred):
-    margin = 0.5
-    return K.mean((1 - y_true) * 0.5 * y_pred + 0.5 * y_true * K.maximum(margin - y_pred, 0))
+    margin = 2.0  # TODO dynamically changed margin??
+    return K.mean(y_true * 0.5 * y_pred + 0.5 * (1 - y_true) * K.maximum(margin - y_pred, 0))
 
 
 def squash(activations, axis=-1):
@@ -15,6 +15,10 @@ def squash(activations, axis=-1):
             (1 + K.sum(K.square(activations), axis, keepdims=True)) / \
             K.sqrt(K.sum(K.square(activations), axis, keepdims=True) + K.epsilon())
     return scale * activations
+
+
+def decay_lr(lr, rate):
+    return lr * rate
 
 
 def custom_generator(iterator):

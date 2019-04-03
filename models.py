@@ -33,8 +33,8 @@ def FashionSiameseCapsNet(input_shape):
     encoded_1 = siamese_capsule(x1)
     encoded_2 = siamese_capsule(x2)
 
-    out = layers.Lambda(lambda x: K.abs(x[0] - x[1]))([encoded_1, encoded_2])
-    out = layers.Dense(units=1, activation="sigmoid", name="capsnet")(out)
+    out = layers.Lambda(lambda x: K.sqrt(K.sum(K.pow(x[0]-x[1], 2), 1, keepdims=True)))([encoded_1, encoded_2])
+    # out = layers.Dense(units=1, activation="sigmoid", name="capsnet")(out)
 
     model = models.Model(inputs=[x1, x2], outputs=out)
 
