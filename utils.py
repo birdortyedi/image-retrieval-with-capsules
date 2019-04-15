@@ -1,6 +1,7 @@
 from keras import backend as K
 from keras.preprocessing import image
 from SiameseDirectoryIterator import SiameseDirectoryIterator
+import matplotlib.pyplot as plt
 
 
 def triplet_loss(y_true, y_pred):
@@ -55,3 +56,16 @@ def get_iterator(file_path, input_size=256,
                                           target_size=(input_size, input_size))
 
     return t_iterator
+
+
+def plot_info(losses, accuracy):
+    fig, axes = plt.subplots(2, sharex=True, figsize=(12, 8))
+    fig.suptitle('Training Metrics')
+
+    axes[0].set_ylabel("Loss", fontsize=14)
+    axes[0].plot(losses)
+
+    axes[1].set_ylabel("Accuracy", fontsize=14)
+    axes[1].set_xlabel("Epoch", fontsize=14)
+    axes[1].plot(accuracy);
+

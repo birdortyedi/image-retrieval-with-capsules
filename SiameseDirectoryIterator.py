@@ -29,10 +29,9 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
             The next batch.
         """
 
-        batch_x = np.zeros((self.batch_size,) + self.image_shape, dtype=K.floatx())
-        locations = np.zeros((len(batch_x),) + (self.num_bbox,), dtype=K.floatx())
-        landmarks = np.zeros((len(batch_x),) + (self.num_landmarks,), dtype=K.floatx())
-        attributes = np.zeros((len(batch_x),) + (self.num_attrs,), dtype=K.floatx())
+        locations = np.zeros((self.batch_size,) + (self.num_bbox,), dtype=K.floatx())
+        landmarks = np.zeros((self.batch_size,) + (self.num_landmarks,), dtype=K.floatx())
+        attributes = np.zeros((self.batch_size,) + (self.num_attrs,), dtype=K.floatx())
 
         # initialize 2 empty arrays for the input image batch
         pairs = [np.zeros((self.batch_size, self.target_size[0], self.target_size[1], 3)) for _ in range(3)]

@@ -40,8 +40,9 @@ def FashionSiameseCapsNet(input_shape):
     l2_negative_encoding = l2_norm(negative_encoding)
 
     out = layers.Concatenate()([l2_anchor_encoding, l2_positive_encoding, l2_negative_encoding])
+    out_pred = layers.Concatenate()([l2_anchor_encoding, l2_positive_encoding])
 
-    model = models.Model(inputs=[x1, x2, x3], outputs=out)
+    model = models.Model(inputs=[x1, x2, x3], outputs=[out, out_pred])
 
     return model
 

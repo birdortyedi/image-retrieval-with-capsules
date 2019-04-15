@@ -11,6 +11,7 @@ def get_arguments():
 
     # MODEL ARCHITECTURE
     parser.add_argument('--input_size', default=128, type=int)
+    parser.add_argument('-k', '--top_k', default=20, type=int)
     parser.add_argument('--conv_filters', default=256, type=int)
     parser.add_argument('--conv_kernel_size', default=9, type=int)
     parser.add_argument('--dim_capsule', default=16, type=int)
@@ -30,7 +31,7 @@ def get_arguments():
                         help="Test the trained model on testing data set")
     parser.add_argument('-w', '--weights', default=None,
                         help="The path of the saved weights. Should be specified when testing")
-    parser.add_argument('--multi_gpu', default=2, type=int,
+    parser.add_argument('--multi_gpu', default=None, type=int,
                         help="The number of gpu available as >1, if =1, then leave default as None")
     parser.add_argument('--initial_epoch', default=0, type=int,
                         help="The initial epoch for beginning of the training")
