@@ -9,8 +9,8 @@ In-Shop Fashion Image Retrieval with Siamese Capsule Networks
 - [x] Siamese capsules implementation
 - [x] Train/Gallery/Query 
 - [x] Class partitioning
-- [ ] Accuracy for Siamese Nets
-- [ ] One-shot task implementation
+- [x] Accuracy for Siamese Nets
+- [x] One-shot task implementation
 - [ ] Architecture design
 - [ ] Reconstruction on testing
 - [ ] Literature search for related works

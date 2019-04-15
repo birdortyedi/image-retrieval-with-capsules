@@ -4,6 +4,10 @@ from utils import squash
 import tensorflow as tf
 
 
+def l2_norm(x):
+    return layers.Lambda(lambda data: K.l2_normalize(data, axis=-1))(x)
+
+
 def conv_bn_block(inputs, filters, k_size, stride, padding, name):
     out = layers.Conv2D(filters=filters, kernel_size=k_size, strides=stride, padding=padding, name=name)(inputs)
     out = layers.BatchNormalization()(out)

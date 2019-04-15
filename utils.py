@@ -1,13 +1,25 @@
-import numpy as np
-from random import shuffle
 from keras import backend as K
 from keras.preprocessing import image
 from SiameseDirectoryIterator import SiameseDirectoryIterator
 
 
-def contrastive_margin_loss(y_true, y_pred):
-    margin = 2.0  # TODO dynamically changed margin??
-    return K.mean(y_true * 0.5 * y_pred + 0.5 * (1 - y_true) * K.maximum(margin - y_pred, 0))
+def triplet_loss(y_true, y_pred):
+    enc_size = int(K.get_variable_shape(y_pred)[1]/3)
+    anchor_encoding = y_pred[:, :enc_size]
+    positive_encoding = y_pred[:, enc_size:2 * enc_size]
+    negative_encoding = y_pred[:, 2 * enc_size:]
+    margin = K.constant(2.0)
+
+    # distance between the anchor and the positive
+    pos_dist = K.sum(K.square(anchor_encoding - positive_encoding), axis=1)
+
+    # distance between the anchor and the negative
+    neg_dist = K.sum(K.square(anchor_encoding - negative_encoding), axis=1)
+
+    # compute loss
+    basic_loss = pos_dist - neg_dist + margin
+
+    return K.mean(K.maximum(basic_loss, 0.0))
 
 
 def squash(activations, axis=-1):
@@ -24,49 +36,7 @@ def decay_lr(lr, rate):
 def custom_generator(iterator):
     while True:
         pairs_batch, y_batch = iterator.next()
-        yield ([pairs_batch[0], pairs_batch[1]], [y_batch])
-
-
-# TODO
-def create_one_shot_task(it_1, it_2, input_size, N):
-    pairs = [np.zeros((N, input_size, input_size, 3)) for _ in range(2)]
-    targets = np.zeros((N,))
-    targets[0] = 1
-
-    i = 0
-    while True:
-        if i == N:
-            break
-
-        if i % N == 0:
-            a, b = next(it_1)
-
-        pairs[0][i, :, :, :] = np.asarray(a, dtype="float")
-
-        c, d = next(it_2)
-
-        if i % N == 0:
-            while np.argmax(d) != np.argmax(b):
-                c, d = next(it_2)
-        else:
-            while np.argmax(d) == np.argmax(b):
-                c, d = next(it_2)
-
-        pairs[1][i, :, :, :] = np.asarray(c, dtype="float")
-        i += 1
-
-    negs = pairs[0]
-    poss = pairs[1]
-    tmp = list(zip(negs, poss, targets))
-    shuffle(tmp)
-    negs, poss, targets = zip(*tmp)
-
-    pairs[0] = np.asarray(negs)
-    pairs[1] = np.asarray(poss)
-    pairs = np.asarray(pairs)
-    targets = np.asarray(targets)
-
-    return pairs, targets
+        yield ([pairs_batch[0], pairs_batch[1], pairs_batch[2]], [y_batch])
 
 
 def get_iterator(file_path, input_size=256,

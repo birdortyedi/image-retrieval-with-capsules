@@ -1,7 +1,7 @@
 from keras import backend as K
 from keras import models, layers
 from keras.utils import multi_gpu_model
-from layers import siamese_capsule_model
+from layers import siamese_capsule_model, l2_norm
 
 
 class MultiGPUNet(models.Model):
@@ -29,14 +29,19 @@ def FashionSiameseCapsNet(input_shape):
 
     x1 = layers.Input(shape=input_shape)
     x2 = layers.Input(shape=input_shape)
+    x3 = layers.Input(shape=input_shape)
 
-    encoded_1 = siamese_capsule(x1)
-    encoded_2 = siamese_capsule(x2)
+    anchor_encoding = siamese_capsule(x1)
+    positive_encoding = siamese_capsule(x2)
+    negative_encoding = siamese_capsule(x3)
 
-    out = layers.Lambda(lambda x: K.sqrt(K.sum(K.pow(x[0]-x[1], 2), 1, keepdims=True)))([encoded_1, encoded_2])
-    # out = layers.Dense(units=1, activation="sigmoid", name="capsnet")(out)
+    l2_anchor_encoding = l2_norm(anchor_encoding)
+    l2_positive_encoding = l2_norm(positive_encoding)
+    l2_negative_encoding = l2_norm(negative_encoding)
 
-    model = models.Model(inputs=[x1, x2], outputs=out)
+    out = layers.Concatenate()([l2_anchor_encoding, l2_positive_encoding, l2_negative_encoding])
+
+    model = models.Model(inputs=[x1, x2, x3], outputs=out)
 
     return model
 

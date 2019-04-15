@@ -7,73 +7,58 @@ from keras import backend as K
 from keras.preprocessing import image
 from config import get_arguments
 from models import FashionSiameseCapsNet, MultiGPUNet
-from utils import custom_generator, get_iterator, contrastive_margin_loss, create_one_shot_task, decay_lr
-
-
-# TODO
-def make_one_shot(model, file_path, subset, input_size, N, k):
-    file_path_1 = os.path.join(file_path, subset[0])
-    file_path_2 = os.path.join(file_path, subset[1])
-
-    data_gen = image.ImageDataGenerator(rescale=1. / 255)
-
-    it_1 = image.DirectoryIterator(directory=file_path_1, image_data_generator=data_gen,
-                                   target_size=(input_size, input_size), shuffle=True, batch_size=1)
-    it_2 = image.DirectoryIterator(directory=file_path_2, image_data_generator=data_gen,
-                                   target_size=(input_size, input_size), shuffle=True, batch_size=1)
-    correct_preds = 0
-    print("Evaluating model on {} random {} way one-shot learning tasks...\n".format(k, N))
-
-    for i in range(k):
-        pairs, targets = create_one_shot_task(it_1=it_1, it_2=it_2, input_size=input_size, N=N)
-        probs = model.predict([pairs[0], pairs[1]])
-        if np.argmin(np.asarray(probs)) == np.argmax(targets):
-            correct_preds += 1
-
-    print("Got an average of {:2.2f}% {} way one-shot learning accuracy \n".format((100.0 * correct_preds / k), N))
-    return correct_preds / k
+from utils import custom_generator, get_iterator, triplet_loss, decay_lr
 
 
 def train(model, args):
     best = -1
 
     # Compile the model
-    model.compile(optimizer=optimizers.Adam(lr=args.lr, amsgrad=True), loss=[contrastive_margin_loss])
+    model.compile(optimizer=optimizers.Adam(lr=args.lr, amsgrad=True), loss=[triplet_loss])
 
     train_iterator = get_iterator(os.path.join(args.filepath, "train"), args.input_size,
-                                                    args.shift_fraction, args.hor_flip, args.whitening,
-                                                    args.rotation_range, args.brightness_range, args.shear_range,
-                                                    args.zoom_range)
+                                               args.shift_fraction, args.hor_flip, args.whitening,
+                                               args.rotation_range, args.brightness_range, args.shear_range,
+                                               args.zoom_range)
     train_generator = custom_generator(train_iterator)
-
+    losses = list()
     for i in range(args.epochs):
         total_loss = 0
+        retr_acc = 0  # TODO
         print("Epoch (" + str(i+1) + "/" + str(args.epochs) + "):")
         t_start = time.time()
         for j in tqdm(range(len(train_iterator)), ncols=50):
             x, y = next(train_generator)
             loss = model.train_on_batch(x, y)
             total_loss += loss
+            # p = model.predict(x)
 
             print("Loss: {:.4f} \t"
                   "Loss at particular batch: {:.4f}".format(total_loss/(j+1), loss) + "\r", end="")
             # print("Total loss: {:.4f} \t"
             #       "Binary Cross-Entropy Loss: {:.4f} \t"
             #       "Reconstruction Loss: {:.4f} \t".format(loss[0], loss[1], loss[2]) + "\r", end="")
+        losses.append(total_loss)
+
+        # To see the encodings, make prediction.
+        x, y = next(train_generator)
+        p = model.predict(x)
+        print(p)
 
         print("Epoch (" + str(i+1) + "/" + str(args.epochs) + ") completed in " + str(time.time()-t_start) + " secs.")
-        val_acc = make_one_shot(model, file_path=args.filepath, subset=["query", "gallery"],
-                                input_size=args.input_size, N=9, k=100)
-        if val_acc >= best:
-            print("\tCurrent best: {:2.4f}, previous best: {:2.4f}".format(val_acc, best))
+
+        if retr_acc > best:
+            print("\tCurrent best: {:2.4f}, previous best: {:2.4f}".format(retr_acc, best))
             print("\tSaving weights to {} \n".format(args.save_dir))
             model.save_weights(os.path.join(args.save_dir, "weights-" + str(i) + ".h5"))
-            best = val_acc
+            best = retr_acc
         else:
             print("\tNot improved the best accuracy ({:2.4f})".format(best))
 
-        K.set_value(model.optimizer.lr, decay_lr(K.get_value(model.optimizer.lr), 0.995))
+        # LR scheduling
+        K.set_value(model.optimizer.lr, decay_lr(K.get_value(model.optimizer.lr), 0.9))
 
+    # Model saving
     model_path = 't_model.h5'
     model.save(os.path.join(args.save_dir, model_path))
     print('The model file saved to \'%s' + model_path + '\'' % args.save_dir)
@@ -82,7 +67,7 @@ def train(model, args):
 def test(model, args):
     # Compile the model
     model.compile(optimizer=optimizers.Adam(lr=args.lr),
-                  loss=[contrastive_margin_loss],
+                  loss=[triplet_loss],
                   # loss_weights=[1., args.lam_recon],
                   metrics={'capsnet': 'accuracy'})
 
