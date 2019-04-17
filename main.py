@@ -22,10 +22,6 @@ def train(model, args):
                                         write_graph=True, write_grads=True)
     tensorboard.set_model(model)
 
-    # logger = callbacks.CSVLogger(os.path.join(args.save_dir, "log.csv"), append=True)
-    # logger.set_model(model)
-    # logger.on_train_begin()
-
     lr_scheduler = callbacks.LearningRateScheduler(schedule=lambda epoch: args.lr * (args.lr_decay ** epoch))
     lr_scheduler.set_model(model)
 
@@ -83,14 +79,10 @@ def train(model, args):
         lr_scheduler.on_epoch_end(i)
 
         # Tensorboard
-        tensorboard.on_epoch_end(i, {"Loss": on_epoch_end_loss})
-
-        # CSVLogger
-        # logger.on_epoch_end(i, {"Learning rate": K.get_value(model.optimizer.lr),
-        #                         "Loss": on_epoch_end_loss})
+        tensorboard.on_epoch_end(i, {"Loss": on_epoch_end_loss,
+                                     "Learning rate": K.get_value(model.optimizer.lr)})
 
     tensorboard.on_train_end(None)
-    # logger.on_train_end()
 
     # Model saving
     model_path = 't_model.h5'
@@ -127,11 +119,11 @@ def test(model, args, query_len=None, gallery_len=None):
     retrieved = 0
     for i in range(query_len):
         query_x, query_y = next(query_generator)
-        query_xs = np.repeat(query_x, args.batch_size, axis=0)
 
         results = list()
         for j in range(gallery_len):
             gallery_xs, gallery_ys = next(gallery_generator)
+            query_xs = np.repeat(query_x, len(gallery_xs), axis=0)
             _, y_pred = model.predict_on_batch([query_xs, gallery_xs, gallery_xs])
 
             for k, (e, y) in enumerate(zip(y_pred, gallery_ys)):
@@ -139,13 +131,16 @@ def test(model, args, query_len=None, gallery_len=None):
                 results.append({"distance": dist, "label": y})
 
         results = sorted(results, key=lambda r: r["distance"])
-        results = [results[i] for i in range(len(results)) if i < args.k]
-        results = np.array([True if r["label"] == query_y else False for r in results])
-
+        results = results[:args.top_k]
+        print(results)
+        print(query_y)
+        results = np.array([True if np.argmax(r["label"]) == np.argmax(query_y) else False for r in results])
+        print(results)
         if results.any():
             retrieved += 1
 
-        print("{} of {} query images have been completed.".format(i+1, len(query_generator)))
+        print("{} of {} query images have been completed with the accuracy of {:2.2f}%.".format(i+1, len(query_generator),
+              np.round(100*retrieved/(i+1), 2)))
 
     acc = retrieved / len(query_generator)
     print("The model has successfully retrieved {} images of {} query images"
@@ -176,11 +171,11 @@ if __name__ == '__main__':
 
     model.summary()
 
-    if args.multi_gpu:
+    if args.multi_gpu and args.multi_gpu >= 2:
         p_model = MultiGPUNet(model, args.multi_gpu)
 
     if not args.testing:
-        if args.multi_gpu:
+        if args.multi_gpu and args.multi_gpu >= 2:
             train(model=p_model, args=args)
             # implicitly sure that p_model defined
         else:

@@ -31,7 +31,7 @@ def get_arguments():
                         help="Test the trained model on testing data set")
     parser.add_argument('-w', '--weights', default=None,
                         help="The path of the saved weights. Should be specified when testing")
-    parser.add_argument('--multi_gpu', default=None, type=int,
+    parser.add_argument('--multi_gpu', default=2, type=int,
                         help="The number of gpu available as >1, if =1, then leave default as None")
     parser.add_argument('--initial_epoch', default=0, type=int,
                         help="The initial epoch for beginning of the training")
