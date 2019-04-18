@@ -73,8 +73,8 @@ def train(model, args):
         losses.append(on_epoch_end_loss)
 
         # LR scheduling
-        print("\nLearning rate is reduced to {}.".format(K.get_value(model.optimizer.lr)))
         lr_scheduler.on_epoch_end(i)
+        print("\nLearning rate is reduced to {}.".format(K.get_value(model.optimizer.lr)))
 
         # Tensorboard
         tensorboard.on_epoch_end(i, {"Loss": on_epoch_end_loss,
@@ -85,7 +85,7 @@ def train(model, args):
     # Model saving
     model_path = 't_model.h5'
     model.save(os.path.join(args.save_dir, model_path))
-    print('The model file saved to \'%s' + model_path + '\'' % args.save_dir)
+    print('The model file saved to \'%s\'' % os.path.join(args.save_dir, model_path))
 
 
 def test(model, args, query_len=None, gallery_len=None):
