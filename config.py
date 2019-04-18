@@ -16,7 +16,7 @@ def get_arguments():
     parser.add_argument('--conv_kernel_size', default=9, type=int)
     parser.add_argument('--dim_capsule', default=16, type=int)
     parser.add_argument('--epochs', default=200, type=int)
-    parser.add_argument('--batch_size', default=128, type=int)
+    parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--lr', default=0.001, type=float,
                         help="Initial learning rate")
     parser.add_argument('--lr_decay', default=0.995, type=float,

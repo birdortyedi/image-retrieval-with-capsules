@@ -42,8 +42,8 @@ def train(model, args):
             loss, _ = model.train_on_batch(x, y)
             total_loss += loss
 
-            print("Loss: {:.4f} \t"
-                  "Loss at particular batch: {:.4f}".format(total_loss/(j+1), loss) + "\r", end="")
+            print("\tLoss: {:.4f}"
+                  "\tLoss at particular batch: {:.4f}".format(total_loss/(j+1), loss) + "\r", end="")
             # print("Total loss: {:.4f} \t"
             #       "Binary Cross-Entropy Loss: {:.4f} \t"
             #       "Reconstruction Loss: {:.4f} \t".format(loss[0], loss[1], loss[2]) + "\r", end="")
@@ -88,7 +88,7 @@ def train(model, args):
     print('The model file saved to \'%s' + model_path + '\'' % args.save_dir)
 
 
-def test(model, args, query_len=100, gallery_len=100):
+def test(model, args, query_len=None, gallery_len=None):
     # Compile the model
     model.compile(optimizer=optimizers.Adam(lr=args.lr, amsgrad=True), loss=[triplet_loss, None])
 
