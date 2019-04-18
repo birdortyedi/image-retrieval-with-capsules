@@ -10,13 +10,13 @@ def get_arguments():
     parser.add_argument('--save_dir', default='./results')
 
     # MODEL ARCHITECTURE
-    parser.add_argument('--input_size', default=128, type=int)
+    parser.add_argument('--input_size', default=256, type=int)
     parser.add_argument('-k', '--top_k', default=20, type=int)
     parser.add_argument('--conv_filters', default=256, type=int)
     parser.add_argument('--conv_kernel_size', default=9, type=int)
     parser.add_argument('--dim_capsule', default=16, type=int)
-    parser.add_argument('--epochs', default=250, type=int)
-    parser.add_argument('--batch_size', default=32, type=int)
+    parser.add_argument('--epochs', default=200, type=int)
+    parser.add_argument('--batch_size', default=128, type=int)
     parser.add_argument('--lr', default=0.001, type=float,
                         help="Initial learning rate")
     parser.add_argument('--lr_decay', default=0.995, type=float,
@@ -43,13 +43,13 @@ def get_arguments():
                         help="Verbose or not")
 
     # DATA AUGMENTATION
-    parser.add_argument('--shift_fraction', default=0., type=float,
+    parser.add_argument('--shift_fraction', default=0.25, type=float,
                         help="Fraction of pixels to shift at most in each direction.")
-    parser.add_argument('--hor_flip', default=False, type=bool,
+    parser.add_argument('--hor_flip', default=True, type=bool,
                         help="Flipping the images randomly on horizontal line.")
     parser.add_argument('--whitening', default=False, type=bool,
                         help="Applies ZCA Whitening randomly.")
-    parser.add_argument('--rotation_range', default=0, type=int,
+    parser.add_argument('--rotation_range', default=30, type=int,
                         help="The range of rotation degree for the images.")
     parser.add_argument('--brightness_range', default=None, type=list,
                         help="The range of brightness degree for the images.")

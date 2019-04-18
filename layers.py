@@ -22,9 +22,9 @@ def primary_capsule(inputs, dim_capsule, name, n_channels=32, kernel_size=9, str
 
 
 def siamese_capsule_model(inputs):
-    out = conv_bn_block(inputs, filters=64, k_size=9, stride=1, padding="valid", name="conv_block_1")
-    out = conv_bn_block(out, filters=128, k_size=7, stride=2, padding="valid", name="conv_block_2")
-    out = conv_bn_block(out, filters=128, k_size=5, stride=2, padding="valid", name="conv_block_3")
+    out = conv_bn_block(inputs, filters=64, k_size=9, stride=2, padding="same", name="conv_block_1")
+    out = conv_bn_block(out, filters=128, k_size=7, stride=2, padding="same", name="conv_block_2")
+    out = conv_bn_block(out, filters=256, k_size=5, stride=2, padding="same", name="conv_block_3")
     out = primary_capsule(out, dim_capsule=16, name="primarycaps")
     out = FashionCaps(num_capsule=1, dim_capsule=128, routings=3, name="fashioncaps")(out)
     return layers.Flatten()(out)

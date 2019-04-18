@@ -34,15 +34,20 @@ def decay_lr(lr, rate):
     return lr * rate
 
 
-def custom_generator(iterator):
-    while True:
-        pairs_batch, y_batch = iterator.next()
-        yield ([pairs_batch[0], pairs_batch[1], pairs_batch[2]], [y_batch])
+def custom_generator(iterator, is_train=True):
+    if is_train:
+        while True:
+            pairs_batch, y_batch = iterator.next()
+            yield ([pairs_batch[0], pairs_batch[1], pairs_batch[2]], [y_batch])
+    else:
+        while True:
+            pairs_batch, y_batch = iterator.next()
+            yield ([pairs_batch], [y_batch])
 
 
-def get_iterator(file_path, input_size=256,
+def get_iterator(file_path, input_size=256, batch_size=32,
                  shift_fraction=0., h_flip=False, zca_whit=False, rot_range=0.,
-                 bright_range=0., shear_range=0., zoom_range=0.):
+                 bright_range=0., shear_range=0., zoom_range=0., is_train=True):
     data_gen = image.ImageDataGenerator(width_shift_range=shift_fraction,
                                         height_shift_range=shift_fraction,
                                         horizontal_flip=h_flip,
@@ -53,7 +58,8 @@ def get_iterator(file_path, input_size=256,
                                         zoom_range=zoom_range,
                                         rescale=1./255)
     t_iterator = SiameseDirectoryIterator(directory=file_path, image_data_generator=data_gen,
-                                          target_size=(input_size, input_size))
+                                          batch_size=batch_size, target_size=(input_size, input_size),
+                                          is_train=is_train)
 
     return t_iterator
 

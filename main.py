@@ -4,7 +4,6 @@ import numpy as np
 from tqdm import tqdm
 from keras import optimizers, callbacks
 from keras import backend as K
-from keras.preprocessing import image
 from config import get_arguments
 from models import FashionSiameseCapsNet, MultiGPUNet
 from utils import custom_generator, get_iterator, triplet_loss
@@ -25,10 +24,9 @@ def train(model, args):
     lr_scheduler = callbacks.LearningRateScheduler(schedule=lambda epoch: args.lr * (args.lr_decay ** epoch))
     lr_scheduler.set_model(model)
 
-    train_iterator = get_iterator(os.path.join(args.filepath, "train"), args.input_size,
-                                               args.shift_fraction, args.hor_flip, args.whitening,
-                                               args.rotation_range, args.brightness_range, args.shear_range,
-                                               args.zoom_range)
+    train_iterator = get_iterator(os.path.join(args.filepath, "train"), args.input_size, args.batch_size,
+                                  args.shift_fraction, args.hor_flip, args.whitening, args.rotation_range,
+                                  args.brightness_range, args.shear_range, args.zoom_range)
     train_generator = custom_generator(train_iterator)
 
     losses = list()
@@ -39,7 +37,7 @@ def train(model, args):
         t_start = time.time()
         lr_scheduler.on_epoch_begin(i)
 
-        for j in tqdm(range(len(train_iterator)), ncols=50):
+        for j in tqdm(range(len(train_iterator)), ncols=100):
             x, y = next(train_generator)
             loss, _ = model.train_on_batch(x, y)
             total_loss += loss
@@ -90,61 +88,74 @@ def train(model, args):
     print('The model file saved to \'%s' + model_path + '\'' % args.save_dir)
 
 
-def test(model, args, query_len=None, gallery_len=None):
+def test(model, args, query_len=100, gallery_len=100):
     # Compile the model
     model.compile(optimizer=optimizers.Adam(lr=args.lr, amsgrad=True), loss=[triplet_loss, None])
 
-    data_gen = image.ImageDataGenerator(rescale=1./255)
+    query_iterator = get_iterator(os.path.join(args.filepath, "query"), args.input_size, 1,
+                                  0., False, False, 0, None, 0., 0., False)
+    query_generator = custom_generator(query_iterator, False)
 
-    query_generator = data_gen.flow_from_directory(os.path.join(args.filepath, "query"),
-                                                   target_size=(args.input_size, args.input_size),
-                                                   shuffle=True,
-                                                   batch_size=1)
-
-    gallery_generator = data_gen.flow_from_directory(os.path.join(args.filepath, "gallery"),
-                                                     target_size=(args.input_size, args.input_size),
-                                                     shuffle=True,
-                                                     batch_size=args.batch_size)
+    gallery_iterator = get_iterator(os.path.join(args.filepath, "gallery"), args.input_size, args.batch_size,
+                                    0., False, False, 0, None, 0., 0., False)
+    gallery_generator = custom_generator(gallery_iterator, False)
 
     if query_len is None:
-        query_len = len(query_generator)
+        query_len = len(query_iterator)
     else:
-        assert query_len <= len(query_generator)
+        assert query_len <= len(query_iterator)
 
     if gallery_len is None:
-        gallery_len = len(gallery_generator)
+        gallery_len = len(gallery_iterator)
     else:
-        assert gallery_len <= len(gallery_generator)
+        assert gallery_len <= len(gallery_iterator)
 
-    retrieved = 0
+    relevant, retrieved = 0, 0
     for i in range(query_len):
         query_x, query_y = next(query_generator)
+        query_x = np.array(query_x).reshape((np.array(query_x).shape[1:]))
 
         results = list()
         for j in range(gallery_len):
             gallery_xs, gallery_ys = next(gallery_generator)
+            gallery_xs = np.array(gallery_xs).reshape((np.array(gallery_xs).shape[1:]))
+
             query_xs = np.repeat(query_x, len(gallery_xs), axis=0)
+
             _, y_pred = model.predict_on_batch([query_xs, gallery_xs, gallery_xs])
 
-            for k, (e, y) in enumerate(zip(y_pred, gallery_ys)):
+            for k, (e, y) in enumerate(zip(y_pred, gallery_ys[0])):
                 dist = np.sum(np.square(e[:int(len(e)/2)] - e[int(len(e)/2):]))
-                results.append({"distance": dist, "label": y})
+                results.append({"distance": dist, "label": y["class_idx"], "item_idx": y["item_idx"]})
 
         results = sorted(results, key=lambda r: r["distance"])
         results = results[:args.top_k]
-        print(results)
-        print(query_y)
-        results = np.array([True if np.argmax(r["label"]) == np.argmax(query_y) else False for r in results])
-        print(results)
-        if results.any():
+
+        relevance_results = np.array([True if r["label"] == query_y[0][0]["class_idx"] else False
+                                      for r in results])
+        retrieval_results = np.array([True if r["item_idx"] == query_y[0][0]["item_idx"] else False
+                                      for r in results])
+
+        if relevance_results.any():
+            relevant += 1
+
+        if retrieval_results.any():
             retrieved += 1
 
-        print("{} of {} query images have been completed with the accuracy of {:2.2f}%.".format(i+1, len(query_generator),
-              np.round(100*retrieved/(i+1), 2)))
+        print("{} of {} query images have been completed with the "
+              "relevance accuracy of {:2.2f}% and "
+              "the retrieval accuracy of {:2.2f}%.".format(i+1, query_len,
+                                                           np.round(100*relevant/(i+1), 2),
+                                                           np.round(100*retrieved/(i+1), 2)))
 
-    acc = retrieved / len(query_generator)
-    print("The model has successfully retrieved {} images of {} query images"
-          "\nThe top-{} retrieval accuracy:\t{}\n".format(retrieved, len(query_generator), args.top_k, acc))
+    retrieval_acc = 100 * retrieved / query_len
+    relevance_acc = 100 * relevant / query_len
+
+    print("The model has successfully retrieved {} images of {} relevant images in {} query images"
+          "\nThe top-{} relevance accuracy:\t{:2.2f}"
+          "\nThe top-{} retrieval accuracy:\t{:2.2f}\n".format(retrieved, relevant, query_len,
+                                                          args.top_k, relevance_acc,
+                                                          args.top_k, retrieval_acc))
 
     # TODO
     # # Reconstruct batch of images
