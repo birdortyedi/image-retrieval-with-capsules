@@ -53,28 +53,28 @@ def train(model, args):
         # p, _ = model.predict(x)
         # print(p)
 
-        print("\nEpoch (" + str(i+1) + "/" + str(args.epochs) + ") completed in " + str(time.time()-t_start) + " secs.")
+        print("\nEpoch ({}/{}) completed in {:5.6f} secs.".format(i+1, args.epochs, time.time()-t_start))
 
         # On epoch end loss and improved or not
         on_epoch_end_loss = total_loss/len(train_iterator)
-        print("On epoch end loss: {}".format(on_epoch_end_loss))
+        print("On epoch end loss: {:.6f}".format(on_epoch_end_loss))
         if len(losses) > 0:
             if np.min(losses) > on_epoch_end_loss:
-                print("\nSaving weights to {}".format(os.path.join(args.save_dir, "weights-" + str(i+1) + ".h5")))
-                if os.path.exists(os.path.join(args.save_dir, "weights-" + str(np.argmin(losses)) + ".h5")):
+                print("\nSaving weights to {}".format(os.path.join(args.save_dir, "weights-" + str(i) + ".h5")))
+                if os.path.isfile(os.path.join(args.save_dir, "weights-" + str(np.argmin(losses)) + ".h5")):
                     os.remove(os.path.join(args.save_dir, "weights-" + str(np.argmin(losses)) + ".h5"))
-                model.save_weights(os.path.join(args.save_dir, "weights-" + str(i+1) + ".h5"))
+                model.save_weights(os.path.join(args.save_dir, "weights-" + str(i) + ".h5"))
             else:
-                print("\nLoss value not improved from ({:.6f})".format(on_epoch_end_loss))
+                print("\nLoss value {:.6f} not improved from ({:.6f})".format(on_epoch_end_loss, np.min(losses)))
         else:
-            print("\nSaving weights to {}".format(os.path.join(args.save_dir, "weights-" + str(i+1) + ".h5")))
-            model.save_weights(os.path.join(args.save_dir, "weights-" + str(i+1) + ".h5"))
+            print("\nSaving weights to {}".format(os.path.join(args.save_dir, "weights-" + str(i) + ".h5")))
+            model.save_weights(os.path.join(args.save_dir, "weights-" + str(i) + ".h5"))
 
         losses.append(on_epoch_end_loss)
 
         # LR scheduling
         lr_scheduler.on_epoch_end(i)
-        print("\nLearning rate is reduced to {}.".format(K.get_value(model.optimizer.lr)))
+        print("\nLearning rate is reduced to {:.8f}.".format(K.get_value(model.optimizer.lr)))
 
         # Tensorboard
         tensorboard.on_epoch_end(i, {"Loss": on_epoch_end_loss,
@@ -85,7 +85,7 @@ def train(model, args):
     # Model saving
     model_path = 't_model.h5'
     model.save(os.path.join(args.save_dir, model_path))
-    print('The model file saved to \'%s\'' % os.path.join(args.save_dir, model_path))
+    print("The model file saved to \"{}\"".format(os.path.join(args.save_dir, model_path)))
 
 
 def test(model, args, query_len=None, gallery_len=None):
@@ -154,8 +154,8 @@ def test(model, args, query_len=None, gallery_len=None):
     print("The model has successfully retrieved {} images of {} relevant images in {} query images"
           "\nThe top-{} relevance accuracy:\t{:2.2f}"
           "\nThe top-{} retrieval accuracy:\t{:2.2f}\n".format(retrieved, relevant, query_len,
-                                                          args.top_k, relevance_acc,
-                                                          args.top_k, retrieval_acc))
+                                                               args.top_k, relevance_acc,
+                                                               args.top_k, retrieval_acc))
 
     # TODO
     # # Reconstruct batch of images

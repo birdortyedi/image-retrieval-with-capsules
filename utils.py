@@ -23,6 +23,10 @@ def triplet_loss(y_true, y_pred):
     return K.mean(K.maximum(basic_loss, 0.0))
 
 
+def abs_log(x):
+    return x * K.log(K.abs(x)) / K.abs(x)
+
+
 def squash(activations, axis=-1):
     scale = K.sum(K.square(activations), axis, keepdims=True) / \
             (1 + K.sum(K.square(activations), axis, keepdims=True)) / \

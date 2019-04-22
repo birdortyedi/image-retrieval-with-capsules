@@ -46,22 +46,30 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
             # Pick anchor image
             # print("Anchor image")
             idx_1 = rng.randint(0, self.samples)
-            pairs[0][i, :, :, :], anchor_item_idx = self.get_image(idx_1)
+            anchor_item_idx = str(self.filenames[idx_1]).split("/")[-2]
+            pairs[0][i, :, :, :] = self.get_image(idx_1)
+            # print(anchor_item_idx)
 
             # pick positive and negative samples to anchor image.
             # print("Positive image")
             idx_2 = rng.randint(0, self.samples)
-            while self.classes[idx_2] != self.classes[idx_1]:
+            positive_item_idx = str(self.filenames[idx_2]).split("/")[-2]
+            while positive_item_idx != anchor_item_idx:
                 idx_2 = rng.randint(0, self.samples)
+                positive_item_idx = str(self.filenames[idx_2]).split("/")[-2]
 
-            pairs[1][i, :, :, :], positive_item_idx = self.get_image(idx_2)
+            # print(positive_item_idx)
+            pairs[1][i, :, :, :] = self.get_image(idx_2)
 
             # print("Negative image")
             idx_3 = rng.randint(0, self.samples)
-            while self.classes[idx_3] == self.classes[idx_1]:
+            negative_item_idx = str(self.filenames[idx_3]).split("/")[-2]
+            while negative_item_idx == anchor_item_idx:
                 idx_3 = rng.randint(0, self.samples)
+                negative_item_idx = str(self.filenames[idx_3]).split("/")[-2]
 
-            pairs[2][i, :, :, :], negative_item_idx = self.get_image(idx_3)
+            # print(negative_item_idx)
+            pairs[2][i, :, :, :] = self.get_image(idx_3)
 
             if not self.is_train:
                 targets.append({"class_idx": self.classes[idx_1],
@@ -109,7 +117,6 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
 
     def get_image(self, idx):
         fname = self.filenames[idx]
-        item_idx = str(fname).split("/")[-2]
         # print("Category: " + str(self.classes[idx_2]) + ", Filename: " + str(fname_2) + "\n")
         img = image.load_img(os.path.join(self.directory, fname),
                              grayscale=self.color_mode == 'grayscale',
@@ -117,7 +124,7 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
         img = image.img_to_array(img, data_format=self.data_format)
         img = self.image_data_generator.random_transform(img)
         img = self.image_data_generator.standardize(img)
-        return img, item_idx
+        return img
 
     def get_bbox(self, fname):
         bbox = self.bounding_boxes[fname]
