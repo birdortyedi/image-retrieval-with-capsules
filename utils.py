@@ -12,10 +12,10 @@ def triplet_loss(y_true, y_pred):
     margin = K.constant(2.0)
 
     # distance between the anchor and the positive
-    pos_dist = K.sum(K.square(anchor_encoding - positive_encoding), axis=1)
+    pos_dist = euclidean_dist(anchor_encoding, positive_encoding)
 
     # distance between the anchor and the negative
-    neg_dist = K.sum(K.square(anchor_encoding - negative_encoding), axis=1)
+    neg_dist = euclidean_dist(anchor_encoding, negative_encoding)
 
     # compute loss
     basic_loss = pos_dist - neg_dist + margin
@@ -23,8 +23,13 @@ def triplet_loss(y_true, y_pred):
     return K.mean(K.maximum(basic_loss, 0.0))
 
 
-def abs_log(x):
-    return x * K.log(K.abs(x)) / K.abs(x)
+def euclidean_dist(a, e):
+    return K.sqrt(K.sum(K.square(a - e), axis=1))
+
+
+# # TODO
+# def cosine_dist(a, e):
+#     return K.dot(a, e) / (K.square(K.dot(a, a)) * K.square(K.dot(e, e)))
 
 
 def squash(activations, axis=-1):
@@ -46,7 +51,7 @@ def custom_generator(iterator, is_train=True):
     else:
         while True:
             pairs_batch, y_batch = iterator.next()
-            yield ([pairs_batch], [y_batch])
+            yield (pairs_batch, y_batch)
 
 
 def get_iterator(file_path, input_size=256, batch_size=32,
@@ -77,5 +82,5 @@ def plot_info(losses, accuracy):
 
     axes[1].set_ylabel("Accuracy", fontsize=14)
     axes[1].set_xlabel("Epoch", fontsize=14)
-    axes[1].plot(accuracy);
+    axes[1].plot(accuracy)
 

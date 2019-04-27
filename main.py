@@ -2,11 +2,13 @@ import os
 import time
 import numpy as np
 from tqdm import tqdm
+from colorama import Fore
 from keras import optimizers, callbacks
+from keras.preprocessing.image import ImageDataGenerator
 from keras import backend as K
 from config import get_arguments
 from models import FashionSiameseCapsNet, MultiGPUNet
-from utils import custom_generator, get_iterator, triplet_loss
+from utils import custom_generator, get_iterator, triplet_loss, euclidean_dist
 
 
 def train(model, args):
@@ -30,14 +32,15 @@ def train(model, args):
     train_generator = custom_generator(train_iterator)
 
     losses = list()
-    for i in range(args.epochs):
+    for i in range(args.initial_epoch, args.epochs):
         total_loss = 0
 
         print("Epoch (" + str(i+1) + "/" + str(args.epochs) + "):")
         t_start = time.time()
         lr_scheduler.on_epoch_begin(i)
 
-        for j in tqdm(range(len(train_iterator)), ncols=100):
+        for j in tqdm(range(len(train_iterator)), ncols=100, desc="Training",
+                      bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Fore.RESET)):
             x, y = next(train_generator)
             loss, _ = model.train_on_batch(x, y)
             total_loss += loss
@@ -54,6 +57,10 @@ def train(model, args):
         # print(p)
 
         print("\nEpoch ({}/{}) completed in {:5.6f} secs.".format(i+1, args.epochs, time.time()-t_start))
+
+        if i % 10:
+            print("Evaluating the model...")
+            test(model=model, args=args)
 
         # On epoch end loss and improved or not
         on_epoch_end_loss = total_loss/len(train_iterator)
@@ -88,74 +95,44 @@ def train(model, args):
     print("The model file saved to \"{}\"".format(os.path.join(args.save_dir, model_path)))
 
 
-def test(model, args, query_len=None, gallery_len=None):
-    # Compile the model
-    model.compile(optimizer=optimizers.Adam(lr=args.lr, amsgrad=True), loss=[triplet_loss, None])
+def test(model, args):
+    query_dict = extract_embeddings(model, args)
+    gallery_dict = extract_embeddings(model, args, subset="gallery")
 
-    query_iterator = get_iterator(os.path.join(args.filepath, "query"), args.input_size, 1,
-                                  0., False, False, 0, None, 0., 0., False)
-    query_generator = custom_generator(query_iterator, False)
+    results = list()
+    print("Finding k closest images of gallery set to the query image...")
+    t_start = time.time()
+    for i in tqdm(range(len(query_dict["out"])), ncols=100, desc="Distance Calc",
+                  bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Fore.RESET)):
+        q_result = list()
+        for j in range(len(gallery_dict["out"])):
+            q_result.append({"is_same_cls": (np.argmax(query_dict["cls"][i]) == np.argmax(gallery_dict["cls"][j])),
+                             "is_same_item": (query_dict["fname"][i].split("/")[-2] ==
+                                              gallery_dict["fname"][j].split("/")[-2]),
+                             "distance": euclidean_dist(query_dict["out"][i], gallery_dict["out"][j])})
 
-    gallery_iterator = get_iterator(os.path.join(args.filepath, "gallery"), args.input_size, args.batch_size,
-                                    0., False, False, 0, None, 0., 0., False)
-    gallery_generator = custom_generator(gallery_iterator, False)
+        q_result = sorted(q_result, key=lambda r: r["distance"])
 
-    if query_len is None:
-        query_len = len(query_iterator)
-    else:
-        assert query_len <= len(query_iterator)
+        results.append(q_result[:50])
 
-    if gallery_len is None:
-        gallery_len = len(gallery_iterator)
-    else:
-        assert gallery_len <= len(gallery_iterator)
+    retr_acc_1 = eval_results(results, k=1)
+    retr_acc_5 = eval_results(results, k=5)
+    retr_acc_10 = eval_results(results, k=10)
+    retr_acc_20 = eval_results(results, k=20)
+    retr_acc_30 = eval_results(results, k=30)
+    retr_acc_40 = eval_results(results, k=40)
+    retr_acc_50 = eval_results(results)
 
-    relevant, retrieved = 0, 0
-    for i in range(query_len):
-        query_x, query_y = next(query_generator)
-        query_x = np.array(query_x).reshape((np.array(query_x).shape[1:]))
-
-        results = list()
-        for j in range(gallery_len):
-            gallery_xs, gallery_ys = next(gallery_generator)
-            gallery_xs = np.array(gallery_xs).reshape((np.array(gallery_xs).shape[1:]))
-
-            query_xs = np.repeat(query_x, len(gallery_xs), axis=0)
-
-            _, y_pred = model.predict_on_batch([query_xs, gallery_xs, gallery_xs])
-
-            for k, (e, y) in enumerate(zip(y_pred, gallery_ys[0])):
-                dist = np.sum(np.square(e[:int(len(e)/2)] - e[int(len(e)/2):]))
-                results.append({"distance": dist, "label": y["class_idx"], "item_idx": y["item_idx"]})
-
-        results = sorted(results, key=lambda r: r["distance"])
-        results = results[:args.top_k]
-
-        relevance_results = np.array([True if r["label"] == query_y[0][0]["class_idx"] else False
-                                      for r in results])
-        retrieval_results = np.array([True if r["item_idx"] == query_y[0][0]["item_idx"] else False
-                                      for r in results])
-
-        if relevance_results.any():
-            relevant += 1
-
-        if retrieval_results.any():
-            retrieved += 1
-
-        print("{} of {} query images have been completed with the "
-              "relevance accuracy of {:2.2f}% and "
-              "the retrieval accuracy of {:2.2f}%.".format(i+1, query_len,
-                                                           np.round(100*relevant/(i+1), 2),
-                                                           np.round(100*retrieved/(i+1), 2)))
-
-    retrieval_acc = 100 * retrieved / query_len
-    relevance_acc = 100 * relevant / query_len
-
-    print("The model has successfully retrieved {} images of {} relevant images in {} query images"
-          "\nThe top-{} relevance accuracy:\t{:2.2f}"
-          "\nThe top-{} retrieval accuracy:\t{:2.2f}\n".format(retrieved, relevant, query_len,
-                                                               args.top_k, relevance_acc,
-                                                               args.top_k, retrieval_acc))
+    print("Testing is completed.\tTime Elapsed: {:5.2f}\n"
+          "The retrieval accuracies:\n"
+          "\tTop-1: {:2.2f}\n"
+          "\tTop-5: {:2.2f}\n"
+          "\tTop-10: {:2.2f}\n"
+          "\tTop-20: {:2.2f}\n"
+          "\tTop-30: {:2.2f}\n"
+          "\tTop-40: {:2.2f}\n"
+          "\tTop-50: {:2.2f}\n".format(time.time() - t_start, retr_acc_1, retr_acc_5,  retr_acc_10,
+                                       retr_acc_20, retr_acc_30, retr_acc_40, retr_acc_50))
 
     # TODO
     # # Reconstruct batch of images
@@ -165,6 +142,43 @@ def test(model, args, query_len=None, gallery_len=None):
     #
     #   # Save reconstructed and original images
     #   save_recons(x_recon, x_test_batch, y_pred, y_test_batch, args.save_dir)
+
+
+def extract_embeddings(model, args, subset="query"):
+    print("Extracting 128-bytes features for each image in {} set...".format(subset))
+    data_gen = ImageDataGenerator(rescale=1/255.)
+
+    data_iterator = data_gen.flow_from_directory(directory=os.path.join(args.filepath, subset),
+                                                 batch_size=args.batch_size,
+                                                 shuffle=False)
+
+    for i in tqdm(range(len(data_iterator)), ncols=100, desc=subset,
+                  bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Fore.RESET)):
+        xs, ys = next(data_iterator)
+
+        _, y_pred = model.predict([xs, xs, xs])
+
+        if i > 0:
+            embedings = np.vstack((embedings, y_pred))
+            clss = np.vstack((clss, ys))
+        else:
+            embedings = np.array(y_pred)
+            clss = np.array(ys)
+
+    return {"out": embedings, "cls": clss, "fname": data_iterator.filenames}
+
+
+def eval_results(x, k=50):
+    retrievals = list()
+    for result in x:
+        retrieved = False
+        for r in result[:k]:
+            if r["is_same_item"]:
+                retrieved = True
+                break
+        retrievals.append(retrieved)
+
+    return 100 * np.mean(retrievals)
 
 
 if __name__ == '__main__':
@@ -194,4 +208,4 @@ if __name__ == '__main__':
     else:
         if args.weights is None:
             print('Random initialization of weights.')
-        test(model=model, args=args)
+        test(model=p_model, args=args)
