@@ -1,7 +1,6 @@
 from keras import backend as K
 from keras.preprocessing import image
 from SiameseDirectoryIterator import SiameseDirectoryIterator
-import matplotlib.pyplot as plt
 
 
 def triplet_loss(y_true, y_pred):
@@ -17,19 +16,29 @@ def triplet_loss(y_true, y_pred):
     # distance between the anchor and the negative
     neg_dist = euclidean_dist(anchor_encoding, negative_encoding)
 
-    # compute loss
+    # compute loss for eucl.
     basic_loss = pos_dist - neg_dist + margin
 
     return K.mean(K.maximum(basic_loss, 0.0))
 
 
 def euclidean_dist(a, e):
-    return K.sqrt(K.sum(K.square(a - e), axis=1))
+    return K.sum(K.square(a - e), axis=1)  # squared euclidean distance
+    # return K.sqrt(K.sum(K.square(a - e), axis=1))  # original euclidean distance
 
 
-# # TODO
-# def cosine_dist(a, e):
-#     return K.dot(a, e) / (K.square(K.dot(a, a)) * K.square(K.dot(e, e)))
+def cosine_dist(a, e):
+    return K.batch_dot(a, e, axes=1) / (K.sqrt(K.batch_dot(a, a, axes=1)) * K.sqrt(K.batch_dot(e, e, axes=1)))
+
+# TODO
+# def log_euclidean_dist(a, e):
+#     return 0
+
+
+def sampling(args):
+    z_mu, z_log_var = args
+    eps = K.random_normal(shape=(K.shape(z_mu)[0], K.int_shape(z_mu)[1]))
+    return z_mu + K.exp(0.5 * z_log_var) * eps
 
 
 def squash(activations, axis=-1):
@@ -43,15 +52,11 @@ def decay_lr(lr, rate):
     return lr * rate
 
 
-def custom_generator(iterator, is_train=True):
-    if is_train:
-        while True:
-            pairs_batch, y_batch = iterator.next()
-            yield ([pairs_batch[0], pairs_batch[1], pairs_batch[2]], [y_batch])
-    else:
-        while True:
-            pairs_batch, y_batch = iterator.next()
-            yield (pairs_batch, y_batch)
+def custom_generator(it):
+    while True:
+        pairs_batch, _ = it.next()
+        yield ([pairs_batch[0], pairs_batch[1], pairs_batch[2]],
+               [pairs_batch[0], pairs_batch[0], pairs_batch[1], pairs_batch[2]])
 
 
 def get_iterator(file_path, input_size=256, batch_size=32,
@@ -71,16 +76,3 @@ def get_iterator(file_path, input_size=256, batch_size=32,
                                           is_train=is_train)
 
     return t_iterator
-
-
-def plot_info(losses, accuracy):
-    fig, axes = plt.subplots(2, sharex=True, figsize=(12, 8))
-    fig.suptitle('Training Metrics')
-
-    axes[0].set_ylabel("Loss", fontsize=14)
-    axes[0].plot(losses)
-
-    axes[1].set_ylabel("Accuracy", fontsize=14)
-    axes[1].set_xlabel("Epoch", fontsize=14)
-    axes[1].plot(accuracy)
-

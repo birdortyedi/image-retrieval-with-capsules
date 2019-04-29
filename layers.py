@@ -1,16 +1,23 @@
 from keras import backend as K
 from keras import layers, initializers
-from utils import squash
+from utils import squash, sampling
 import tensorflow as tf
 
 
 def l2_norm(x):
-    return layers.Lambda(lambda data: K.l2_normalize(data, axis=-1))(x)
+    return layers.Lambda(lambda data: K.l2_normalize(data, axis=-1), name="l2_norm")(x)
 
 
 def conv_bn_block(inputs, filters, k_size, stride, padding, name):
     out = layers.Conv2D(filters=filters, kernel_size=k_size, strides=stride, padding=padding, name=name)(inputs)
     out = layers.BatchNormalization()(out)
+    return layers.LeakyReLU()(out)
+
+
+def transpose_conv_bn_block(inputs, filters, k_size, stride, padding, name):
+    out = layers.Conv2DTranspose(filters=filters, kernel_size=k_size, strides=stride, padding=padding,
+                                 name=name)(inputs)
+    out = layers.BatchNormalization(axis=-1)(out)
     return layers.LeakyReLU()(out)
 
 
@@ -26,8 +33,29 @@ def siamese_capsule_model(inputs):
     out = conv_bn_block(out, filters=128, k_size=7, stride=2, padding="same", name="conv_block_2")
     out = conv_bn_block(out, filters=256, k_size=5, stride=2, padding="same", name="conv_block_3")
     out = primary_capsule(out, dim_capsule=16, name="primarycaps")
-    out = FashionCaps(num_capsule=1, dim_capsule=128, routings=3, name="fashioncaps")(out)
-    return layers.Flatten()(out)
+    out = FashionCaps(num_capsule=16, dim_capsule=8, routings=3, name="fashioncaps")(out)
+    out = layers.Flatten()(out)
+    return l2_norm(out)
+
+
+def decoder_model(inputs):
+    out = layers.Dense(8*8*256, activation='relu')(inputs)
+    out = layers.Reshape((8, 8, 256))(out)
+    out = transpose_conv_bn_block(out, filters=128, k_size=9, stride=1, padding='same', name="t_conv_block_1")
+    out = transpose_conv_bn_block(out, filters=64, k_size=7, stride=2, padding='same', name="t_conv_block_2")
+    out = transpose_conv_bn_block(out, filters=32, k_size=7, stride=2, padding='same', name="t_conv_block_3")
+    out = transpose_conv_bn_block(out, filters=16, k_size=5, stride=2, padding='same', name="t_conv_block_4")
+    out = transpose_conv_bn_block(out, filters=16, k_size=5, stride=2, padding='same', name="t_conv_block_5")
+    return layers.Conv2DTranspose(filters=3, kernel_size=5, strides=2, padding='same', activation='sigmoid',
+                                  name="decoder_out")(out)
+
+
+def encoder_model(inputs):
+    out = layers.Dense(64, activation='relu')(inputs)
+    z_mu = layers.Dense(2, name='z_mean')(out)
+    z_log_var = layers.Dense(2, name='z_log_var')(out)
+    z = layers.Lambda(sampling, name='z')([z_mu, z_log_var])
+    return z, z_mu, z_log_var
 
 
 class Length(layers.Layer):

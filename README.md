@@ -13,9 +13,8 @@ In-Shop Fashion Image Retrieval with Siamese Capsule Networks
 - [x] Retrieval implementation
 - [x] Architecture design
 - [x] Starting the training process
-- [ ] Literature search for related works
-- [ ] Reconstruction
-- [ ] One-shot task implementation
+- [x] Literature search for related works
+- [x] Reconstruction
 - [ ] Log-euclidean distance metric
 
 ## Project Details

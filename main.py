@@ -8,12 +8,14 @@ from keras.preprocessing.image import ImageDataGenerator
 from keras import backend as K
 from config import get_arguments
 from models import FashionSiameseCapsNet, MultiGPUNet
-from utils import custom_generator, get_iterator, triplet_loss, euclidean_dist
+from utils import custom_generator, get_iterator, triplet_loss
 
 
-def train(model, args):
+def train(model, eval_model, args):
     # Compile the model
-    model.compile(optimizer=optimizers.Adam(lr=args.lr, amsgrad=True), loss=[triplet_loss, None])
+    model.compile(optimizer=optimizers.Adam(lr=args.lr, amsgrad=True),
+                  loss=[triplet_loss, "mse", "mse", "mse"],
+                  loss_weights=[1.0, args.lam_recon, args.lam_recon, args.lam_recon])
 
     if not os.path.isdir(os.path.join(args.save_dir, "tensorboard-logs")):
         os.mkdir(os.path.join(args.save_dir, "tensorboard-logs"))
@@ -33,7 +35,7 @@ def train(model, args):
 
     losses = list()
     for i in range(args.initial_epoch, args.epochs):
-        total_loss = 0
+        total_loss, total_triplet_loss, total_vae_anchor, total_vae_pos, total_vae_neg = 0, 0, 0, 0, 0
 
         print("Epoch (" + str(i+1) + "/" + str(args.epochs) + "):")
         t_start = time.time()
@@ -42,25 +44,29 @@ def train(model, args):
         for j in tqdm(range(len(train_iterator)), ncols=100, desc="Training",
                       bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Fore.RESET)):
             x, y = next(train_generator)
-            loss, _ = model.train_on_batch(x, y)
+
+            loss, triplet_loss_, vae_anchor, vae_pos, vae_neg = model.train_on_batch(x, y)
             total_loss += loss
+            total_triplet_loss += triplet_loss_
+            total_vae_anchor += vae_anchor
+            total_vae_pos += vae_pos
+            total_vae_neg += vae_neg
 
-            print("\tLoss: {:.4f}"
-                  "\tLoss at particular batch: {:.4f}".format(total_loss/(j+1), loss) + "\r", end="")
-            # print("Total loss: {:.4f} \t"
-            #       "Binary Cross-Entropy Loss: {:.4f} \t"
-            #       "Reconstruction Loss: {:.4f} \t".format(loss[0], loss[1], loss[2]) + "\r", end="")
-
-        # To see the encodings, make prediction.
-        # x, y = next(train_generator)
-        # p, _ = model.predict(x)
-        # print(p)
+            print(" Total: {:.4f} -"
+                  " Triplet: {:.4f} -"
+                  " VAE-MSE (Anc): {:.4f} -"
+                  " VAE-MSE (Pos): {:.4f} -"
+                  " VAE-MSE (Neg): {:.4f}".format(total_loss/(j+1),
+                                                  total_triplet_loss/(j+1),
+                                                  total_vae_anchor/(j+1),
+                                                  total_vae_pos/(j+1),
+                                                  total_vae_neg/(j+1)) + "\r", end="")
 
         print("\nEpoch ({}/{}) completed in {:5.6f} secs.".format(i+1, args.epochs, time.time()-t_start))
 
-        if i % 10:
-            print("Evaluating the model...")
-            test(model=model, args=args)
+        if i % 5 == 0:
+            print("\nEvaluating the model...")
+            test(model=eval_model, args=args)
 
         # On epoch end loss and improved or not
         on_epoch_end_loss = total_loss/len(train_iterator)
@@ -109,7 +115,7 @@ def test(model, args):
             q_result.append({"is_same_cls": (np.argmax(query_dict["cls"][i]) == np.argmax(gallery_dict["cls"][j])),
                              "is_same_item": (query_dict["fname"][i].split("/")[-2] ==
                                               gallery_dict["fname"][j].split("/")[-2]),
-                             "distance": euclidean_dist(query_dict["out"][i], gallery_dict["out"][j])})
+                             "distance": np.sqrt(np.sum((query_dict["out"][i] - gallery_dict["out"][j])**2, axis=-1))})
 
         q_result = sorted(q_result, key=lambda r: r["distance"])
 
@@ -156,7 +162,7 @@ def extract_embeddings(model, args, subset="query"):
                   bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Fore.RESET)):
         xs, ys = next(data_iterator)
 
-        _, y_pred = model.predict([xs, xs, xs])
+        y_pred = model.predict(xs)
 
         if i > 0:
             embedings = np.vstack((embedings, y_pred))
@@ -189,23 +195,25 @@ if __name__ == '__main__':
     if not os.path.exists(args.save_dir):
         os.mkdir(args.save_dir)
 
-    model = FashionSiameseCapsNet(input_shape=(args.input_size, args.input_size, 3))
+    model, eval_model = FashionSiameseCapsNet(input_shape=(args.input_size, args.input_size, 3))
 
     if args.weights is not None:
         model.load_weights(args.weights)
-
-    model.summary()
+        eval_model.load_weights(args.weights)
 
     if args.multi_gpu and args.multi_gpu >= 2:
         p_model = MultiGPUNet(model, args.multi_gpu)
+        p_eval_model = MultiGPUNet(eval_model, args.multi_gpu)
 
     if not args.testing:
+        model.summary()
         if args.multi_gpu and args.multi_gpu >= 2:
-            train(model=p_model, args=args)
+            train(model=p_model, eval_model=p_eval_model, args=args)
             # implicitly sure that p_model defined
         else:
             train(model=model, args=args)
     else:
+        eval_model.summary()
         if args.weights is None:
             print('Random initialization of weights.')
-        test(model=p_model, args=args)
+        test(model=p_eval_model, args=args)
