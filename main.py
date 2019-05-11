@@ -13,9 +13,8 @@ from utils import custom_generator, get_iterator, triplet_loss
 
 def train(model, eval_model, args):
     # Compile the model
-    model.compile(optimizer=optimizers.Adam(lr=args.lr, amsgrad=True),
-                  loss=[triplet_loss, "mse", "mse", "mse"],
-                  loss_weights=[1.0, args.lam_recon, args.lam_recon, args.lam_recon])
+    model.compile(optimizer=optimizers.Adam(lr=args.lr),
+                  loss=[triplet_loss])
 
     if not os.path.isdir(os.path.join(args.save_dir, "tensorboard-logs")):
         os.mkdir(os.path.join(args.save_dir, "tensorboard-logs"))
@@ -35,32 +34,22 @@ def train(model, eval_model, args):
 
     losses = list()
     for i in range(args.initial_epoch, args.epochs):
-        total_loss, total_triplet_loss, total_vae_anchor, total_vae_pos, total_vae_neg = 0, 0, 0, 0, 0
+        total_loss, total_triplet_loss, total_kld = 0, 0, 0
 
         print("Epoch (" + str(i+1) + "/" + str(args.epochs) + "):")
         t_start = time.time()
         lr_scheduler.on_epoch_begin(i)
+        if i > 0:
+            print("\nLearning rate is reduced to {:.8f}.".format(K.get_value(model.optimizer.lr)))
 
         for j in tqdm(range(len(train_iterator)), ncols=100, desc="Training",
                       bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Fore.RESET)):
             x, y = next(train_generator)
 
-            loss, triplet_loss_, vae_anchor, vae_pos, vae_neg = model.train_on_batch(x, y)
+            loss = model.train_on_batch(x, y)
             total_loss += loss
-            total_triplet_loss += triplet_loss_
-            total_vae_anchor += vae_anchor
-            total_vae_pos += vae_pos
-            total_vae_neg += vae_neg
 
-            print(" Total: {:.4f} -"
-                  " Triplet: {:.4f} -"
-                  " VAE-MSE (Anc): {:.4f} -"
-                  " VAE-MSE (Pos): {:.4f} -"
-                  " VAE-MSE (Neg): {:.4f}".format(total_loss/(j+1),
-                                                  total_triplet_loss/(j+1),
-                                                  total_vae_anchor/(j+1),
-                                                  total_vae_pos/(j+1),
-                                                  total_vae_neg/(j+1)) + "\r", end="")
+            print("\tTriplet Loss: {:.4f}".format(total_loss/(j+1)),  "\r", end="")
 
         print("\nEpoch ({}/{}) completed in {:5.6f} secs.".format(i+1, args.epochs, time.time()-t_start))
 
@@ -70,27 +59,30 @@ def train(model, eval_model, args):
 
         # On epoch end loss and improved or not
         on_epoch_end_loss = total_loss/len(train_iterator)
+        on_epoch_end_triplet = total_triplet_loss/len(train_iterator)
+        on_epoch_end_mse = total_kld/len(train_iterator)
         print("On epoch end loss: {:.6f}".format(on_epoch_end_loss))
         if len(losses) > 0:
             if np.min(losses) > on_epoch_end_loss:
-                print("\nSaving weights to {}".format(os.path.join(args.save_dir, "weights-" + str(i) + ".h5")))
-                if os.path.isfile(os.path.join(args.save_dir, "weights-" + str(np.argmin(losses)) + ".h5")):
-                    os.remove(os.path.join(args.save_dir, "weights-" + str(np.argmin(losses)) + ".h5"))
-                model.save_weights(os.path.join(args.save_dir, "weights-" + str(i) + ".h5"))
+                print("\nSaving weights to {}".format(os.path.join(args.save_dir, "weights-" + str(i+1) + ".h5")))
+                # if os.path.isfile(os.path.join(args.save_dir, "weights-" + str(np.argmin(losses)) + ".h5")):
+                #     os.remove(os.path.join(args.save_dir, "weights-" + str(np.argmin(losses)) + ".h5"))
+                model.save_weights(os.path.join(args.save_dir, "weights-" + str(i+1) + ".h5"))
             else:
                 print("\nLoss value {:.6f} not improved from ({:.6f})".format(on_epoch_end_loss, np.min(losses)))
         else:
-            print("\nSaving weights to {}".format(os.path.join(args.save_dir, "weights-" + str(i) + ".h5")))
-            model.save_weights(os.path.join(args.save_dir, "weights-" + str(i) + ".h5"))
+            print("\nSaving weights to {}".format(os.path.join(args.save_dir, "weights-" + str(i+1) + ".h5")))
+            model.save_weights(os.path.join(args.save_dir, "weights-" + str(i+1) + ".h5"))
 
         losses.append(on_epoch_end_loss)
 
         # LR scheduling
         lr_scheduler.on_epoch_end(i)
-        print("\nLearning rate is reduced to {:.8f}.".format(K.get_value(model.optimizer.lr)))
 
         # Tensorboard
-        tensorboard.on_epoch_end(i, {"Loss": on_epoch_end_loss,
+        tensorboard.on_epoch_end(i, {"Total Loss": on_epoch_end_loss,
+                                     "Triplet Loss": on_epoch_end_triplet,
+                                     "Reconstruction Loss": on_epoch_end_mse,
                                      "Learning rate": K.get_value(model.optimizer.lr)})
 
     tensorboard.on_train_end(None)
@@ -115,7 +107,7 @@ def test(model, args):
             q_result.append({"is_same_cls": (np.argmax(query_dict["cls"][i]) == np.argmax(gallery_dict["cls"][j])),
                              "is_same_item": (query_dict["fname"][i].split("/")[-2] ==
                                               gallery_dict["fname"][j].split("/")[-2]),
-                             "distance": np.sqrt(np.sum((query_dict["out"][i] - gallery_dict["out"][j])**2, axis=-1))})
+                             "distance": np.sum(np.square(query_dict["out"][i] - gallery_dict["out"][j]), axis=-1)})
 
         q_result = sorted(q_result, key=lambda r: r["distance"])
 
@@ -151,7 +143,7 @@ def test(model, args):
 
 
 def extract_embeddings(model, args, subset="query"):
-    print("Extracting 128-bytes features for each image in {} set...".format(subset))
+    print("Extracting features for each image in {} set...".format(subset))
     data_gen = ImageDataGenerator(rescale=1/255.)
 
     data_iterator = data_gen.flow_from_directory(directory=os.path.join(args.filepath, subset),
@@ -162,7 +154,7 @@ def extract_embeddings(model, args, subset="query"):
                   bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Fore.RESET)):
         xs, ys = next(data_iterator)
 
-        y_pred = model.predict(xs)
+        y_pred = model.predict([xs, ys])
 
         if i > 0:
             embedings = np.vstack((embedings, y_pred))
@@ -195,7 +187,7 @@ if __name__ == '__main__':
     if not os.path.exists(args.save_dir):
         os.mkdir(args.save_dir)
 
-    model, eval_model = FashionSiameseCapsNet(input_shape=(args.input_size, args.input_size, 3))
+    model, eval_model = FashionSiameseCapsNet(input_shape=(args.input_size, args.input_size, 3), args=args)
 
     if args.weights is not None:
         model.load_weights(args.weights)
@@ -211,7 +203,7 @@ if __name__ == '__main__':
             train(model=p_model, eval_model=p_eval_model, args=args)
             # implicitly sure that p_model defined
         else:
-            train(model=model, args=args)
+            train(model=model, eval_model=eval_model, args=args)
     else:
         eval_model.summary()
         if args.weights is None:

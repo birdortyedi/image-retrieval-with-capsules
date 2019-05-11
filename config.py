@@ -10,18 +10,20 @@ def get_arguments():
     parser.add_argument('--save_dir', default='./results')
 
     # MODEL ARCHITECTURE
+    parser.add_argument('--num_class', default=23, type=int)
     parser.add_argument('--input_size', default=256, type=int)
     parser.add_argument('-k', '--top_k', default=20, type=int)  # unused
+    parser.add_argument('-mt', '--metric_type', default="euclidean", type=str)
     parser.add_argument('--conv_filters', default=256, type=int)
     parser.add_argument('--conv_kernel_size', default=9, type=int)
-    parser.add_argument('--dim_capsule', default=16, type=int)
-    parser.add_argument('--epochs', default=200, type=int)
+    parser.add_argument('--dim_capsule', default=8, type=int)
+    parser.add_argument('--epochs', default=50, type=int)
     parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--lr', default=0.001, type=float,
                         help="Initial learning rate")
     parser.add_argument('--lr_decay', default=0.99, type=float,
                         help="The value multiplied by lr at each epoch. Set a larger value for larger epochs")
-    parser.add_argument('--lam_recon', default=9.83, type=float,
+    parser.add_argument('--lam_recon', default=9.8304, type=float,
                         help="The coefficient for the loss of decoder")
     parser.add_argument('--patience', default=20, type=int,
                         help="The number of patience epochs for early stopping")  # unused

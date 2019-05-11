@@ -1,7 +1,7 @@
 from keras import backend as K
 from keras import models, layers
 from keras.utils import multi_gpu_model
-from layers import siamese_capsule_model, decoder_model, encoder_model
+from layers import siamese_capsule_model, decoder_model, Mask, Length
 
 
 class MultiGPUNet(models.Model):
@@ -21,10 +21,10 @@ class MultiGPUNet(models.Model):
         return super(MultiGPUNet, self).__getattribute__(attrname)
 
 
-def FashionSiameseCapsNet(input_shape):
+def FashionSiameseCapsNet(input_shape, args):
     x = layers.Input(shape=input_shape)
 
-    siamese_capsule = models.Model(x, siamese_capsule_model(x))
+    siamese_capsule = models.Model(x, siamese_capsule_model(x, args))
     siamese_capsule.summary()
 
     x1 = layers.Input(shape=input_shape)
@@ -35,25 +35,30 @@ def FashionSiameseCapsNet(input_shape):
     positive_encoding = siamese_capsule(x2)
     negative_encoding = siamese_capsule(x3)
 
-    out = layers.Concatenate()([anchor_encoding, positive_encoding, negative_encoding])
+    # shape: (None, NUM_CLASS, DIM_CAPSULE)
 
-    # y = layers.Input(shape=(128,))
-    # encoder = models.Model(y, encoder_model(y))
-    # encoder.summary()
+    l2_norm = layers.Lambda(lambda enc: K.l2_normalize(enc, axis=-1))
+    l2_anchor_encoding = l2_norm(anchor_encoding)
+    l2_positive_encoding = l2_norm(positive_encoding)
+    l2_negative_encoding = l2_norm(negative_encoding)
+
+    y = layers.Input(shape=(args.num_class,))
+
+    masked_anchor_encoding = Mask()([l2_anchor_encoding, y])
+    masked_positive_encoding = Mask()([l2_positive_encoding, y])
+    masked_negative_encoding = Mask()([l2_negative_encoding, y])
+
+    # shape: (None, NUM_CLASS*DIM_CAPSULE)
+
+    out = layers.Concatenate()([masked_anchor_encoding, masked_positive_encoding, masked_negative_encoding])
+
+    # z = layers.Input(shape=(args.num_class*args.dim_capsule,))
+    # decoder = models.Model(z, decoder_model(z))
+    # decoder.summary()
     #
-    # anchor_latent_vector = encoder(anchor_encoding)
-    # positive_latent_vector = encoder(positive_encoding)
-    # negative_latent_vector = encoder(negative_encoding)
+    # anchor_decoding = decoder(masked_anchor_encoding)
 
-    y = layers.Input(shape=(128,))
-    decoder = models.Model(y, decoder_model(y))
-    decoder.summary()
-
-    anchor_decoding = decoder(anchor_encoding)
-    positive_decoding = decoder(positive_encoding)
-    negative_decoding = decoder(negative_encoding)
-
-    model = models.Model(inputs=[x1, x2, x3], outputs=[out, anchor_decoding, positive_decoding, negative_decoding])
-    eval_model = models.Model(inputs=x1, outputs=anchor_encoding)
+    model = models.Model(inputs=[x1, x2, x3, y], outputs=[out])
+    eval_model = models.Model(inputs=[x1, y], outputs=masked_anchor_encoding)
 
     return model, eval_model

@@ -29,6 +29,12 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
         # Returns
             The next batch.
         """
+        with self.lock:
+            index_array = next(self.index_generator)
+
+        batch_y = np.zeros((self.batch_size, 23), dtype=K.floatx())
+        for i, label in enumerate(self.classes[index_array]):
+            batch_y[i, label] = 1.
 
         locations = np.zeros((self.batch_size,) + (self.num_bbox,), dtype=K.floatx())
         landmarks = np.zeros((self.batch_size,) + (self.num_landmarks,), dtype=K.floatx())
@@ -99,10 +105,10 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
             shuffle(tmp)
             anchor_img, positive_img, negative_img, targets = zip(*tmp)
 
-            pairs[0] = np.asarray(anchor_img)
-            pairs[1] = np.asarray(positive_img)
-            pairs[2] = np.asarray(negative_img)
-            targets = np.asarray(targets)
+            pairs[0] = np.array(anchor_img)
+            pairs[1] = np.array(positive_img)
+            pairs[2] = np.array(negative_img)
+            targets = np.array(targets)
 
         y = [targets, locations, landmarks, attributes]
         statements = [True, self.bounding_boxes is not None,
@@ -113,7 +119,7 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
         if not self.is_train:
             return np.asarray(pairs[0]), np.asarray(y)
 
-        return np.asarray(pairs), np.asarray(y)
+        return np.asarray(pairs), batch_y
 
     def get_image(self, idx):
         fname = self.filenames[idx]

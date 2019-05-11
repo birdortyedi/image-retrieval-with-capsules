@@ -1,6 +1,10 @@
 from keras import backend as K
+from keras.metrics import kullback_leibler_divergence
 from keras.preprocessing import image
 from SiameseDirectoryIterator import SiameseDirectoryIterator
+from config import get_arguments
+
+args = get_arguments()
 
 
 def triplet_loss(y_true, y_pred):
@@ -10,35 +14,44 @@ def triplet_loss(y_true, y_pred):
     negative_encoding = y_pred[:, 2 * enc_size:]
     margin = K.constant(2.0)
 
-    # distance between the anchor and the positive
-    pos_dist = euclidean_dist(anchor_encoding, positive_encoding)
+    if args.metric_type == "euclidean":
+        pos_dist = euclidean_dist(anchor_encoding, positive_encoding)
+        neg_dist = euclidean_dist(anchor_encoding, negative_encoding)
+        basic_loss = pos_dist - neg_dist + margin
 
-    # distance between the anchor and the negative
-    neg_dist = euclidean_dist(anchor_encoding, negative_encoding)
+        return K.mean(K.maximum(basic_loss, 0.0))
+    elif args.metric_type == "cosine":
+        pos_dist = cosine_dist(anchor_encoding, positive_encoding)
+        neg_dist = cosine_dist(anchor_encoding, negative_encoding)
 
-    # compute loss for eucl.
-    basic_loss = pos_dist - neg_dist + margin
+        return K.mean(K.log(1 + K.exp(-1 * (pos_dist - neg_dist))))
+    else:
+        raise Exception("NOT IMPLEMENTED YET!")
 
-    return K.mean(K.maximum(basic_loss, 0.0))
+
+def kl_divergence(y_true, y_pred):
+    alpha = 0.9
+    beta = 0.1
+    enc_size = int(K.get_variable_shape(y_pred)[1] / 3)
+    anchor_encoding = y_pred[:, :enc_size]
+    positive_encoding = y_pred[:, enc_size:2 * enc_size]
+    negative_encoding = y_pred[:, 2 * enc_size:]
+
+    return alpha * kullback_leibler_divergence(anchor_encoding, positive_encoding) + \
+        beta * kullback_leibler_divergence(anchor_encoding, (K.reverse(negative_encoding, axes=-1)))
 
 
 def euclidean_dist(a, e):
-    return K.sum(K.square(a - e), axis=1)  # squared euclidean distance
-    # return K.sqrt(K.sum(K.square(a - e), axis=1))  # original euclidean distance
+    # return K.sum(K.square(a - e), axis=-1)  # squared euclidean distance
+    return K.sqrt(K.sum(K.square(a - e), axis=-1))  # original euclidean distance
 
 
 def cosine_dist(a, e):
-    return K.batch_dot(a, e, axes=1) / (K.sqrt(K.batch_dot(a, a, axes=1)) * K.sqrt(K.batch_dot(e, e, axes=1)))
+    return K.mean(1 - K.sum((a * e), axis=-1))  # simple dot product since vectors are l2_normed and pdf
 
 # TODO
 # def log_euclidean_dist(a, e):
 #     return 0
-
-
-def sampling(args):
-    z_mu, z_log_var = args
-    eps = K.random_normal(shape=(K.shape(z_mu)[0], K.int_shape(z_mu)[1]))
-    return z_mu + K.exp(0.5 * z_log_var) * eps
 
 
 def squash(activations, axis=-1):
@@ -54,9 +67,9 @@ def decay_lr(lr, rate):
 
 def custom_generator(it):
     while True:
-        pairs_batch, _ = it.next()
-        yield ([pairs_batch[0], pairs_batch[1], pairs_batch[2]],
-               [pairs_batch[0], pairs_batch[0], pairs_batch[1], pairs_batch[2]])
+        pairs_batch, y_batch = it.next()
+        yield ([pairs_batch[0], pairs_batch[1], pairs_batch[2], y_batch],
+               [y_batch])
 
 
 def get_iterator(file_path, input_size=256, batch_size=32,
