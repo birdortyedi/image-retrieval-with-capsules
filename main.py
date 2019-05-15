@@ -8,13 +8,22 @@ from keras.preprocessing.image import ImageDataGenerator
 from keras import backend as K
 from config import get_arguments
 from models import FashionSiameseCapsNet, MultiGPUNet
-from utils import custom_generator, get_iterator, triplet_loss
+from utils import custom_generator, get_iterator, triplet_eucliden_loss, triplet_cosine_loss
 
 
 def train(model, eval_model, args):
     # Compile the model
-    model.compile(optimizer=optimizers.Adam(lr=args.lr),
-                  loss=[triplet_loss])
+    if args.metric_type == "euclidean":
+        model.compile(optimizer=optimizers.Adam(lr=args.lr),
+                      loss=[triplet_eucliden_loss, "mse", "mse", "mse"],
+                      loss_weights=[1., 0., 0., 0.])
+    elif args.metric_type == "cosine":
+        model.compile(optimizer=optimizers.Adam(lr=args.lr),
+                      loss=[triplet_cosine_loss, "categorical_crossentropy",
+                            "categorical_crossentropy", "categorical_crossentropy"],
+                      loss_weights=[1., 1., 1., 1.])
+    else:
+        raise Exception("Wrong metric type. Available: ['euclidean', 'cosine']")
 
     if not os.path.isdir(os.path.join(args.save_dir, "tensorboard-logs")):
         os.mkdir(os.path.join(args.save_dir, "tensorboard-logs"))
@@ -34,7 +43,8 @@ def train(model, eval_model, args):
 
     losses = list()
     for i in range(args.initial_epoch, args.epochs):
-        total_loss, total_triplet_loss, total_kld = 0, 0, 0
+        total_loss, total_triplet_loss = 0, 0
+        total_anchor_xentr, total_positive_xentr, total_negative_xentr = 0, 0, 0
 
         print("Epoch (" + str(i+1) + "/" + str(args.epochs) + "):")
         t_start = time.time()
@@ -46,10 +56,29 @@ def train(model, eval_model, args):
                       bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Fore.RESET)):
             x, y = next(train_generator)
 
-            loss = model.train_on_batch(x, y)
+            loss, triplet_loss_, anchor_xentr, positive_xentr, negative_xentr = model.train_on_batch(x, y)
             total_loss += loss
+            total_triplet_loss += triplet_loss_
+            total_anchor_xentr += anchor_xentr
+            total_positive_xentr += positive_xentr
+            total_negative_xentr += negative_xentr
 
-            print("\tTriplet Loss: {:.4f}".format(total_loss/(j+1)),  "\r", end="")
+            if args.metric_type == "euclidean":
+                print("\tTotal Loss: {:.4f}"
+                      "\tTriplet Loss: {:.4f}".format(total_loss / (j + 1),
+                                                      total_triplet_loss / (j + 1)),  "\r", end="")
+            elif args.metric_type == "cosine":
+                print("\tTotal Loss: {:.4f}"
+                      "\tTriplet: {:.4f}"
+                      "\tA X-Entropy: {:.4f}"
+                      "\tP X-Entropy: {:.4f}"
+                      "\tN X-Entropy: {:.4f}".format(total_loss / (j + 1),
+                                                     total_triplet_loss / (j + 1),
+                                                     total_anchor_xentr / (j + 1),
+                                                     total_positive_xentr / (j + 1),
+                                                     total_negative_xentr / (j + 1)), "\r", end="")
+            else:
+                Exception("Wrong metric type. Available: ['euclidean', 'cosine']")
 
         print("\nEpoch ({}/{}) completed in {:5.6f} secs.".format(i+1, args.epochs, time.time()-t_start))
 
@@ -60,7 +89,9 @@ def train(model, eval_model, args):
         # On epoch end loss and improved or not
         on_epoch_end_loss = total_loss/len(train_iterator)
         on_epoch_end_triplet = total_triplet_loss/len(train_iterator)
-        on_epoch_end_mse = total_kld/len(train_iterator)
+        on_epoch_end_a_xentr = total_anchor_xentr / len(train_iterator)
+        on_epoch_end_p_xentr = total_positive_xentr / len(train_iterator)
+        on_epoch_end_n_xentr = total_negative_xentr / len(train_iterator)
         print("On epoch end loss: {:.6f}".format(on_epoch_end_loss))
         if len(losses) > 0:
             if np.min(losses) > on_epoch_end_loss:
@@ -82,7 +113,9 @@ def train(model, eval_model, args):
         # Tensorboard
         tensorboard.on_epoch_end(i, {"Total Loss": on_epoch_end_loss,
                                      "Triplet Loss": on_epoch_end_triplet,
-                                     "Reconstruction Loss": on_epoch_end_mse,
+                                     "Anchor X-Entropy Loss": on_epoch_end_a_xentr,
+                                     "Positive X-Entropy Loss": on_epoch_end_p_xentr,
+                                     "Negative X-Entropy Loss": on_epoch_end_n_xentr,
                                      "Learning rate": K.get_value(model.optimizer.lr)})
 
     tensorboard.on_train_end(None)
@@ -104,10 +137,18 @@ def test(model, args):
                   bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Fore.RESET)):
         q_result = list()
         for j in range(len(gallery_dict["out"])):
-            q_result.append({"is_same_cls": (np.argmax(query_dict["cls"][i]) == np.argmax(gallery_dict["cls"][j])),
-                             "is_same_item": (query_dict["fname"][i].split("/")[-2] ==
-                                              gallery_dict["fname"][j].split("/")[-2]),
-                             "distance": np.sum(np.square(query_dict["out"][i] - gallery_dict["out"][j]), axis=-1)})
+            if args.metric_type == "euclidean":
+                q_result.append({"is_same_cls": (np.argmax(query_dict["cls"][i]) == np.argmax(gallery_dict["cls"][j])),
+                                 "is_same_item": (query_dict["fname"][i].split("/")[-2] ==
+                                                  gallery_dict["fname"][j].split("/")[-2]),
+                                 "distance": np.sum(np.square(query_dict["out"][i] - gallery_dict["out"][j]), axis=-1)})
+            elif args.metric_type == "cosine":
+                q_result.append({"is_same_cls": (np.argmax(query_dict["cls"][i]) == np.argmax(gallery_dict["cls"][j])),
+                                 "is_same_item": (query_dict["fname"][i].split("/")[-2] ==
+                                                  gallery_dict["fname"][j].split("/")[-2]),
+                                 "distance": 1 - np.sum(query_dict["out"][i] * gallery_dict["out"][j], axis=-1)})
+            else:
+                raise Exception("Wrong metric type. Available: ['euclidean', 'cosine']")
 
         q_result = sorted(q_result, key=lambda r: r["distance"])
 

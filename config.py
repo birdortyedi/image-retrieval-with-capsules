@@ -7,7 +7,7 @@ def get_arguments():
 
     # INPUT & OUTPUT
     parser.add_argument('--filepath', default='./data/img/BOTH', type=str)
-    parser.add_argument('--save_dir', default='./results')
+    parser.add_argument('--save_dir', default='./results_sq_euc')
 
     # MODEL ARCHITECTURE
     parser.add_argument('--num_class', default=23, type=int)

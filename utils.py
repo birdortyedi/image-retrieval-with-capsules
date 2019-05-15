@@ -7,26 +7,37 @@ from config import get_arguments
 args = get_arguments()
 
 
-def triplet_loss(y_true, y_pred):
+def triplet_eucliden_loss(y_true, y_pred):
     enc_size = int(K.get_variable_shape(y_pred)[1]/3)
     anchor_encoding = y_pred[:, :enc_size]
     positive_encoding = y_pred[:, enc_size:2 * enc_size]
     negative_encoding = y_pred[:, 2 * enc_size:]
     margin = K.constant(2.0)
 
-    if args.metric_type == "euclidean":
-        pos_dist = euclidean_dist(anchor_encoding, positive_encoding)
-        neg_dist = euclidean_dist(anchor_encoding, negative_encoding)
-        basic_loss = pos_dist - neg_dist + margin
+    def euclidean_dist(a, e):
+        return K.sum(K.square(a - e), axis=-1)  # squared euclidean distance
+        # return K.sqrt(K.sum(K.square(a - e), axis=-1))  # original euclidean distance
 
-        return K.mean(K.maximum(basic_loss, 0.0))
-    elif args.metric_type == "cosine":
-        pos_dist = cosine_dist(anchor_encoding, positive_encoding)
-        neg_dist = cosine_dist(anchor_encoding, negative_encoding)
+    pos_dist = euclidean_dist(anchor_encoding, positive_encoding)
+    neg_dist = euclidean_dist(anchor_encoding, negative_encoding)
+    basic_loss = pos_dist - neg_dist + margin
 
-        return K.mean(K.log(1 + K.exp(-1 * (pos_dist - neg_dist))))
-    else:
-        raise Exception("NOT IMPLEMENTED YET!")
+    return K.mean(K.maximum(basic_loss, 0.0))
+
+
+def triplet_cosine_loss(y_true, y_pred):
+    enc_size = int(K.get_variable_shape(y_pred)[1] / 3)
+    anchor_encoding = y_pred[:, :enc_size]
+    positive_encoding = y_pred[:, enc_size:2 * enc_size]
+    negative_encoding = y_pred[:, 2 * enc_size:]
+
+    def cosine_similarity(a, e):
+        return K.sum((a * e), axis=-1)  # simple dot product since vectors are l2_normed and pdf
+
+    positive_sim = cosine_similarity(anchor_encoding, positive_encoding)
+    negative_sim = cosine_similarity(anchor_encoding, negative_encoding)
+
+    return K.mean(K.sum(K.log(1 + K.exp(positive_sim - negative_sim)), axis=-1))
 
 
 def kl_divergence(y_true, y_pred):
@@ -40,14 +51,6 @@ def kl_divergence(y_true, y_pred):
     return alpha * kullback_leibler_divergence(anchor_encoding, positive_encoding) + \
         beta * kullback_leibler_divergence(anchor_encoding, (K.reverse(negative_encoding, axes=-1)))
 
-
-def euclidean_dist(a, e):
-    # return K.sum(K.square(a - e), axis=-1)  # squared euclidean distance
-    return K.sqrt(K.sum(K.square(a - e), axis=-1))  # original euclidean distance
-
-
-def cosine_dist(a, e):
-    return K.mean(1 - K.sum((a * e), axis=-1))  # simple dot product since vectors are l2_normed and pdf
 
 # TODO
 # def log_euclidean_dist(a, e):
@@ -68,13 +71,13 @@ def decay_lr(lr, rate):
 def custom_generator(it):
     while True:
         pairs_batch, y_batch = it.next()
-        yield ([pairs_batch[0], pairs_batch[1], pairs_batch[2], y_batch],
-               [y_batch])
+        yield ([pairs_batch[0], pairs_batch[1], pairs_batch[2], y_batch[0]],
+               [y_batch[0], y_batch[0], y_batch[1], y_batch[2]])
 
 
 def get_iterator(file_path, input_size=256, batch_size=32,
                  shift_fraction=0., h_flip=False, zca_whit=False, rot_range=0.,
-                 bright_range=0., shear_range=0., zoom_range=0., is_train=True):
+                 bright_range=0., shear_range=0., zoom_range=0.):
     data_gen = image.ImageDataGenerator(width_shift_range=shift_fraction,
                                         height_shift_range=shift_fraction,
                                         horizontal_flip=h_flip,
@@ -85,7 +88,6 @@ def get_iterator(file_path, input_size=256, batch_size=32,
                                         zoom_range=zoom_range,
                                         rescale=1./255)
     t_iterator = SiameseDirectoryIterator(directory=file_path, image_data_generator=data_gen,
-                                          batch_size=batch_size, target_size=(input_size, input_size),
-                                          is_train=is_train)
+                                          batch_size=batch_size, target_size=(input_size, input_size))
 
     return t_iterator

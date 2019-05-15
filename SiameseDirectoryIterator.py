@@ -13,7 +13,7 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
                  target_size=(256, 256), color_mode: str = 'rgb',
                  classes=None, class_mode: str = 'categorical',
                  batch_size: int = 32, shuffle: bool = True, seed=None, data_format=None,
-                 follow_links: bool = False, is_train: bool = True):
+                 follow_links: bool = False):
         super().__init__(directory, image_data_generator, target_size, color_mode, classes, class_mode, batch_size,
                          shuffle, seed, data_format, follow_links)
         self.bounding_boxes = bounding_boxes
@@ -22,19 +22,12 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
         self.num_landmarks = num_landmarks
         self.num_attrs = num_attrs
         self.num_bbox = 4
-        self.is_train = is_train
 
     def next(self):
         """
         # Returns
             The next batch.
         """
-        with self.lock:
-            index_array = next(self.index_generator)
-
-        batch_y = np.zeros((self.batch_size, 23), dtype=K.floatx())
-        for i, label in enumerate(self.classes[index_array]):
-            batch_y[i, label] = 1.
 
         locations = np.zeros((self.batch_size,) + (self.num_bbox,), dtype=K.floatx())
         landmarks = np.zeros((self.batch_size,) + (self.num_landmarks,), dtype=K.floatx())
@@ -42,11 +35,7 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
 
         # initialize 2 empty arrays for the input image batch
         pairs = [np.zeros((self.batch_size, self.target_size[0], self.target_size[1], 3)) for _ in range(3)]
-        # For dummy purposes!
-        if self.is_train:
-            targets = np.zeros(shape=(self.batch_size,))
-        else:
-            targets = list()
+        batch_y = [np.zeros((self.batch_size, self.num_classes)) for _ in range(3)]
 
         for i in range(self.batch_size):
             # Pick anchor image
@@ -54,6 +43,7 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
             idx_1 = rng.randint(0, self.samples)
             anchor_item_idx = str(self.filenames[idx_1]).split("/")[-2]
             pairs[0][i, :, :, :] = self.get_image(idx_1)
+            batch_y[0][i, self.classes[idx_1]] = 1
             # print(anchor_item_idx)
 
             # pick positive and negative samples to anchor image.
@@ -66,6 +56,7 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
 
             # print(positive_item_idx)
             pairs[1][i, :, :, :] = self.get_image(idx_2)
+            batch_y[1][i, self.classes[idx_2]] = 1
 
             # print("Negative image")
             idx_3 = rng.randint(0, self.samples)
@@ -76,10 +67,7 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
 
             # print(negative_item_idx)
             pairs[2][i, :, :, :] = self.get_image(idx_3)
-
-            if not self.is_train:
-                targets.append({"class_idx": self.classes[idx_1],
-                                "item_idx": anchor_item_idx})
+            batch_y[2][i, self.classes[idx_3]] = 1
 
             if self.bounding_boxes is not None:
                 locations[i] = (self.get_bbox(self.filenames[idx_1]),
@@ -98,28 +86,35 @@ class SiameseDirectoryIterator(image.DirectoryIterator):
                 attributes[i] = (np.asarray(attr_info_lst_1), np.asarray(attr_info_lst_2), np.asarray(attr_info_lst_3))
 
         if self.shuffle:
-            anchor_img = pairs[0]
-            positive_img = pairs[1]
-            negative_img = pairs[2]
-            tmp = list(zip(anchor_img, positive_img, negative_img, targets))
-            shuffle(tmp)
-            anchor_img, positive_img, negative_img, targets = zip(*tmp)
+            self.shuffle_batches(batch_y, pairs)
 
-            pairs[0] = np.array(anchor_img)
-            pairs[1] = np.array(positive_img)
-            pairs[2] = np.array(negative_img)
-            targets = np.array(targets)
+        pairs = np.asarray(pairs)
 
-        y = [targets, locations, landmarks, attributes]
-        statements = [True, self.bounding_boxes is not None,
-                      self.landmark_info is not None, self.attr_info is not None]
+        # y = [batch_y, locations, landmarks, attributes]
+        # statements = [True, self.bounding_boxes is not None,
+        #               self.landmark_info is not None, self.attr_info is not None]
+        #
+        # y = np.asarray([y_ for y_, s in zip(y, statements) if s]).reshape((self.batch_size,))
 
-        y = np.asarray([y_ for y_, s in zip(y, statements) if s]).reshape((self.batch_size,))
+        return pairs, batch_y
 
-        if not self.is_train:
-            return np.asarray(pairs[0]), np.asarray(y)
-
-        return np.asarray(pairs), batch_y
+    @staticmethod
+    def shuffle_batches(batch_y, pairs):
+        anchor_img = pairs[0]
+        anchor_y = batch_y[0]
+        positive_img = pairs[1]
+        positive_y = batch_y[1]
+        negative_img = pairs[2]
+        negative_y = batch_y[2]
+        tmp = list(zip(anchor_img, positive_img, negative_img, anchor_y, positive_y, negative_y))
+        shuffle(tmp)
+        anchor_img, positive_img, negative_img, anchor_y, positive_y, negative_y = zip(*tmp)
+        pairs[0] = np.array(anchor_img)
+        pairs[1] = np.array(positive_img)
+        pairs[2] = np.array(negative_img)
+        batch_y[0] = np.array(anchor_y)
+        batch_y[1] = np.array(positive_y)
+        batch_y[2] = np.array(negative_y)
 
     def get_image(self, idx):
         fname = self.filenames[idx]

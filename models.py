@@ -37,20 +37,24 @@ def FashionSiameseCapsNet(input_shape, args):
 
     # shape: (None, NUM_CLASS, DIM_CAPSULE)
 
-    l2_norm = layers.Lambda(lambda enc: K.l2_normalize(enc, axis=-1))
+    l2_norm = layers.Lambda(lambda enc: K.l2_normalize(enc, axis=-1) + K.epsilon())
     l2_anchor_encoding = l2_norm(anchor_encoding)
     l2_positive_encoding = l2_norm(positive_encoding)
     l2_negative_encoding = l2_norm(negative_encoding)
 
-    y = layers.Input(shape=(args.num_class,))
+    y1 = layers.Input(shape=(args.num_class,))
 
-    masked_anchor_encoding = Mask()([l2_anchor_encoding, y])
-    masked_positive_encoding = Mask()([l2_positive_encoding, y])
-    masked_negative_encoding = Mask()([l2_negative_encoding, y])
+    masked_anchor_encoding = Mask(name="anchor_mask")([l2_anchor_encoding, y1])
+    masked_positive_encoding = Mask(name="positive_mask")([l2_positive_encoding, y1])
+    masked_negative_encoding = Mask(name="negative_mask")([l2_negative_encoding, y1])
 
     # shape: (None, NUM_CLASS*DIM_CAPSULE)
 
     out = layers.Concatenate()([masked_anchor_encoding, masked_positive_encoding, masked_negative_encoding])
+
+    cls_out_anchor = Length(name="anchor_class")(anchor_encoding)
+    cls_out_positive = Length(name="positive_class")(positive_encoding)
+    cls_out_negative = Length(name="negative_class")(negative_encoding)
 
     # z = layers.Input(shape=(args.num_class*args.dim_capsule,))
     # decoder = models.Model(z, decoder_model(z))
@@ -58,7 +62,8 @@ def FashionSiameseCapsNet(input_shape, args):
     #
     # anchor_decoding = decoder(masked_anchor_encoding)
 
-    model = models.Model(inputs=[x1, x2, x3, y], outputs=[out])
-    eval_model = models.Model(inputs=[x1, y], outputs=masked_anchor_encoding)
+    model = models.Model(inputs=[x1, x2, x3, y1],
+                         outputs=[out, cls_out_anchor, cls_out_positive, cls_out_negative])
+    eval_model = models.Model(inputs=[x1, y1], outputs=masked_anchor_encoding)
 
     return model, eval_model
