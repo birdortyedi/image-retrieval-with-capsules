@@ -1,49 +1,7 @@
 from keras import backend as K
-from keras import layers, initializers
+from keras import layers, initializers, activations
 from utils import squash
 import tensorflow as tf
-
-
-def conv_bn_block(inputs, filters, k_size, stride, padding, name):
-    out = layers.Conv2D(filters=filters, kernel_size=k_size, strides=stride, padding=padding, name=name)(inputs)
-    out = layers.BatchNormalization()(out)
-    out = layers.LeakyReLU()(out)
-    return layers.SpatialDropout2D(rate=0.3)(out)
-
-
-def transpose_conv_bn_block(inputs, filters, k_size, stride, padding, name):
-    out = layers.Conv2DTranspose(filters=filters, kernel_size=k_size, strides=stride, padding=padding,
-                                 name=name)(inputs)
-    out = layers.BatchNormalization(axis=-1)(out)
-    out = layers.LeakyReLU()(out)
-    return layers.SpatialDropout2D(rate=0.3)(out)
-
-
-def primary_capsule(inputs, dim_capsule, name, n_channels=16, kernel_size=7, strides=2, padding="same"):
-    inputs = layers.Conv2D(filters=dim_capsule*n_channels, kernel_size=kernel_size, strides=strides, padding=padding,
-                           name=name+'_conv')(inputs)
-    inputs = layers.Reshape(target_shape=[-1, dim_capsule], name=name+'_reshape')(inputs)
-    return layers.Lambda(squash, name=name+'_squash')(inputs)
-
-
-def siamese_capsule_model(inputs, args):
-    out = conv_bn_block(inputs, filters=64, k_size=7, stride=3, padding="valid", name="conv_block_1")
-    out = conv_bn_block(out, filters=128, k_size=5, stride=2, padding="valid", name="conv_block_2")
-    out = primary_capsule(out, dim_capsule=16, name="primarycaps")
-    out = FashionCaps(num_capsule=args.num_class, dim_capsule=args.dim_capsule, routings=3, name="fashioncaps")(out)
-    return out
-
-
-def decoder_model(inputs):
-    out = layers.Dense(8*8*256, activation='relu')(inputs)
-    out = layers.Reshape((8, 8, 256))(out)
-    out = transpose_conv_bn_block(out, filters=128, k_size=9, stride=1, padding='same', name="t_conv_block_1")
-    out = transpose_conv_bn_block(out, filters=64, k_size=7, stride=2, padding='same', name="t_conv_block_2")
-    out = transpose_conv_bn_block(out, filters=32, k_size=7, stride=2, padding='same', name="t_conv_block_3")
-    out = transpose_conv_bn_block(out, filters=16, k_size=5, stride=2, padding='same', name="t_conv_block_4")
-    out = transpose_conv_bn_block(out, filters=16, k_size=5, stride=2, padding='same', name="t_conv_block_5")
-    return layers.Conv2DTranspose(filters=3, kernel_size=5, strides=2, padding='same', activation='sigmoid',
-                                  name="decoder_out")(out)
 
 
 class Length(layers.Layer):
@@ -79,12 +37,75 @@ class Mask(layers.Layer):
 
 
 class FashionCaps(layers.Layer):
+    def __init__(self, num_capsule, dim_capsule, routings=3,
+                 share_weights=True, activation='squash', kernel_initializer='glorot_uniform', **kwargs):
+        super(FashionCaps, self).__init__(**kwargs)
+        self.num_capsule = num_capsule
+        self.dim_capsule = dim_capsule
+        self.routings = routings
+        self.share_weights = share_weights
+        self.kernel_initializer = initializers.get(kernel_initializer)
+        if activation == 'squash':
+            self.activation = squash
+        else:
+            self.activation = activations.get(activation)
+
+    def build(self, input_shape):
+        assert len(input_shape) >= 3
+        input_num_capsule = input_shape[1]
+        input_dim_capsule = input_shape[2]
+        if self.share_weights:
+            self.kernel = self.add_weight(name='capsule_kernel',
+                                          shape=(1, input_dim_capsule, self.num_capsule * self.dim_capsule),
+                                          initializer=self.kernel_initializer,
+                                          trainable=True)
+        else:
+            self.kernel = self.add_weight(name='capsule_kernel',
+                                          shape=(input_num_capsule, input_dim_capsule,
+                                                 self.num_capsule * self.dim_capsule),
+                                          initializer=self.kernel_initializer,
+                                          trainable=True)
+
+    def call(self, inputs, training=None):
+        if self.share_weights:
+            hat_inputs = K.conv1d(inputs, self.kernel)
+        else:
+            hat_inputs = K.local_conv1d(inputs, self.kernel, [1], [1])
+
+        batch_size = K.shape(inputs)[0]
+        input_num_capsule = K.shape(inputs)[1]
+        hat_inputs = K.reshape(hat_inputs,
+                               (batch_size, input_num_capsule, self.num_capsule, self.dim_capsule))
+        hat_inputs = K.permute_dimensions(hat_inputs, (0, 2, 1, 3))
+
+        b = K.zeros_like(hat_inputs[:, :, :, 0])
+        for i in range(self.routings):
+            c = tf.nn.softmax(b, dim=1)
+            o = self.activation(K.batch_dot(c, hat_inputs, [2, 2]))
+            if i < self.routings - 1:
+                b = K.batch_dot(o, hat_inputs, [2, 3])
+
+        return o
+
+    def compute_output_shape(self, input_shape):
+        return tuple([None, self.num_capsule, self.dim_capsule])
+
+    def get_config(self):
+        config = {'num_capsule': self.num_capsule,
+                  'dim_capsule': self.dim_capsule,
+                  'routings': self.routings}
+        base_config = super(FashionCaps, self).get_config()
+        new_config = list(base_config.items()) + list(config.items())
+        return dict(new_config)
+
+
+class FashionCapsOld(layers.Layer):
     def __init__(self, num_capsule, dim_capsule, routings=3, kernel_initializer='glorot_uniform', **kwargs):
         self.num_capsule = num_capsule
         self.dim_capsule = dim_capsule
         self.routings = routings
         self.kernel_initializer = initializers.get(kernel_initializer)
-        super(FashionCaps, self).__init__(**kwargs)
+        super(FashionCapsOld, self).__init__(**kwargs)
 
     def build(self, input_shape):
         assert len(input_shape) >= 3
@@ -124,6 +145,6 @@ class FashionCaps(layers.Layer):
             'dim_capsule': self.dim_capsule,
             'routings': self.routings
         }
-        base_config = super(FashionCaps, self).get_config()
+        base_config = super(FashionCaps, self).get_config
         new_config = list(base_config.items()) + list(config.items())
         return dict(new_config)

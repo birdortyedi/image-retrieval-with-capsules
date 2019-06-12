@@ -1,7 +1,7 @@
 from keras import backend as K
 from keras.metrics import kullback_leibler_divergence
 from keras.preprocessing import image
-from SiameseDirectoryIterator import SiameseDirectoryIterator
+from TripletDirectoryIterator import TripletDirectoryIterator
 from config import get_arguments
 
 args = get_arguments()
@@ -32,12 +32,23 @@ def triplet_cosine_loss(y_true, y_pred):
     negative_encoding = y_pred[:, 2 * enc_size:]
 
     def cosine_similarity(a, e):
-        return K.sum((a * e), axis=-1)  # simple dot product since vectors are l2_normed and pdf
+        return K.batch_dot(a, e, axes=-1)  # simple dot product since vectors are l2_normed and pdf
 
-    positive_sim = cosine_similarity(anchor_encoding, positive_encoding)
-    negative_sim = cosine_similarity(anchor_encoding, negative_encoding)
+    pos_sim = cosine_similarity(anchor_encoding, positive_encoding)
+    neg_sim = cosine_similarity(anchor_encoding, negative_encoding)
 
-    return K.mean(K.sum(K.log(1 + K.exp(positive_sim - negative_sim)), axis=-1))
+    return K.mean(K.sum(K.log(1 + K.exp(-(pos_sim - neg_sim))), axis=-1))
+
+
+def margin_loss(y_true, y_pred):
+    m_plus = 0.9
+    m_minus = 1 - m_plus
+    lamb = 0.5
+
+    loss = y_true * K.square(K.relu(m_plus - y_pred)) + \
+        lamb * (1 - y_true) * K.square(K.relu(y_pred - m_minus))
+
+    return K.sum(loss, axis=-1)
 
 
 def kl_divergence(y_true, y_pred):
@@ -87,7 +98,7 @@ def get_iterator(file_path, input_size=256, batch_size=32,
                                         shear_range=shear_range,
                                         zoom_range=zoom_range,
                                         rescale=1./255)
-    t_iterator = SiameseDirectoryIterator(directory=file_path, image_data_generator=data_gen,
+    t_iterator = TripletDirectoryIterator(directory=file_path, image_data_generator=data_gen,
                                           batch_size=batch_size, target_size=(input_size, input_size))
 
     return t_iterator

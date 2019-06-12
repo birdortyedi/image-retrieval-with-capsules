@@ -1,7 +1,8 @@
 from keras import backend as K
 from keras import models, layers
 from keras.utils import multi_gpu_model
-from layers import siamese_capsule_model, decoder_model, Mask, Length
+from layers import Mask, Length
+from blocks import capsule_model
 
 
 class MultiGPUNet(models.Model):
@@ -24,16 +25,16 @@ class MultiGPUNet(models.Model):
 def FashionSiameseCapsNet(input_shape, args):
     x = layers.Input(shape=input_shape)
 
-    siamese_capsule = models.Model(x, siamese_capsule_model(x, args))
-    siamese_capsule.summary()
+    caps_model = models.Model(x, capsule_model(x, args))
+    caps_model.summary()
 
     x1 = layers.Input(shape=input_shape)
     x2 = layers.Input(shape=input_shape)
     x3 = layers.Input(shape=input_shape)
 
-    anchor_encoding = siamese_capsule(x1)
-    positive_encoding = siamese_capsule(x2)
-    negative_encoding = siamese_capsule(x3)
+    anchor_encoding = caps_model(x1)
+    positive_encoding = caps_model(x2)
+    negative_encoding = caps_model(x3)
 
     # shape: (None, NUM_CLASS, DIM_CAPSULE)
 

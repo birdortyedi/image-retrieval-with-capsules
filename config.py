@@ -16,12 +16,12 @@ def get_arguments():
     parser.add_argument('-mt', '--metric_type', default="euclidean", type=str)
     parser.add_argument('--conv_filters', default=256, type=int)
     parser.add_argument('--conv_kernel_size', default=9, type=int)
-    parser.add_argument('--dim_capsule', default=8, type=int)
-    parser.add_argument('--epochs', default=50, type=int)
+    parser.add_argument('--dim_capsule', default=16, type=int)
+    parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--lr', default=0.001, type=float,
                         help="Initial learning rate")
-    parser.add_argument('--lr_decay', default=0.99, type=float,
+    parser.add_argument('--lr_decay', default=0.995, type=float,
                         help="The value multiplied by lr at each epoch. Set a larger value for larger epochs")
     parser.add_argument('--lam_recon', default=9.8304, type=float,
                         help="The coefficient for the loss of decoder")
@@ -45,7 +45,7 @@ def get_arguments():
                         help="Verbose or not")
 
     # DATA AUGMENTATION
-    parser.add_argument('--shift_fraction', default=0.25, type=float,
+    parser.add_argument('--shift_fraction', default=0.2, type=float,
                         help="Fraction of pixels to shift at most in each direction.")
     parser.add_argument('--hor_flip', default=True, type=bool,
                         help="Flipping the images randomly on horizontal line.")
@@ -53,11 +53,11 @@ def get_arguments():
                         help="Applies ZCA Whitening randomly.")
     parser.add_argument('--rotation_range', default=30, type=int,
                         help="The range of rotation degree for the images.")
-    parser.add_argument('--brightness_range', default=None, type=list,
+    parser.add_argument('--brightness_range', default=[1.5, 0.5], type=list,
                         help="The range of brightness degree for the images.")
-    parser.add_argument('--shear_range', default=0., type=float,
+    parser.add_argument('--shear_range', default=0.1, type=float,
                         help="Shear angle in counter-clockwise direction in degrees.")
-    parser.add_argument('--zoom_range', default=0., type=float,
+    parser.add_argument('--zoom_range', default=0.1, type=float,
                         help="Range for random zoom for the images.")
 
     args = parser.parse_args()

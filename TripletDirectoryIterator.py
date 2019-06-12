@@ -6,7 +6,7 @@ import numpy.random as rng
 import os
 
 
-class SiameseDirectoryIterator(image.DirectoryIterator):
+class TripletDirectoryIterator(image.DirectoryIterator):
     def __init__(self, directory, image_data_generator,
                  bounding_boxes: dict = None, landmark_info: dict = None, attr_info: dict = None,
                  num_landmarks=26, num_attrs=463,

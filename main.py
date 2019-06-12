@@ -8,7 +8,7 @@ from keras.preprocessing.image import ImageDataGenerator
 from keras import backend as K
 from config import get_arguments
 from models import FashionSiameseCapsNet, MultiGPUNet
-from utils import custom_generator, get_iterator, triplet_eucliden_loss, triplet_cosine_loss
+from utils import custom_generator, get_iterator, triplet_eucliden_loss, triplet_cosine_loss, margin_loss
 
 
 def train(model, eval_model, args):
@@ -19,9 +19,9 @@ def train(model, eval_model, args):
                       loss_weights=[1., 0., 0., 0.])
     elif args.metric_type == "cosine":
         model.compile(optimizer=optimizers.Adam(lr=args.lr),
-                      loss=[triplet_cosine_loss, "categorical_crossentropy",
-                            "categorical_crossentropy", "categorical_crossentropy"],
-                      loss_weights=[1., 1., 1., 1.])
+                      loss=[triplet_cosine_loss, margin_loss,
+                            margin_loss, margin_loss],
+                      loss_weights=[1., 0.2, 0.2, 0.2])
     else:
         raise Exception("Wrong metric type. Available: ['euclidean', 'cosine']")
 
@@ -70,13 +70,13 @@ def train(model, eval_model, args):
             elif args.metric_type == "cosine":
                 print("\tTotal Loss: {:.4f}"
                       "\tTriplet: {:.4f}"
-                      "\tA X-Entropy: {:.4f}"
-                      "\tP X-Entropy: {:.4f}"
-                      "\tN X-Entropy: {:.4f}".format(total_loss / (j + 1),
-                                                     total_triplet_loss / (j + 1),
-                                                     total_anchor_xentr / (j + 1),
-                                                     total_positive_xentr / (j + 1),
-                                                     total_negative_xentr / (j + 1)), "\r", end="")
+                      "\tA X-Ent: {:.4f}"
+                      "\tP X-Ent: {:.4f}"
+                      "\tN X-Ent: {:.4f}".format(total_loss / (j + 1),
+                                                 total_triplet_loss / (j + 1),
+                                                 total_anchor_xentr / (j + 1),
+                                                 total_positive_xentr / (j + 1),
+                                                 total_negative_xentr / (j + 1)), "\r", end="")
             else:
                 Exception("Wrong metric type. Available: ['euclidean', 'cosine']")
 
