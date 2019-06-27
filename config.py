@@ -17,7 +17,7 @@ def get_arguments():
     parser.add_argument('--conv_filters', default=256, type=int)
     parser.add_argument('--conv_kernel_size', default=9, type=int)
     parser.add_argument('--dim_capsule', default=16, type=int)
-    parser.add_argument('--epochs', default=100, type=int)
+    parser.add_argument('--epochs', default=350, type=int)
     parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--lr', default=0.001, type=float,
                         help="Initial learning rate")
@@ -35,7 +35,7 @@ def get_arguments():
                         help="The path of the saved weights. Should be specified when testing")
     parser.add_argument('--multi_gpu', default=2, type=int,
                         help="The number of gpu available as >1, if =1, then leave default as None")
-    parser.add_argument('--initial_epoch', default=0, type=int,
+    parser.add_argument('--initial_epoch', default=286, type=int,
                         help="The initial epoch for beginning of the training")
     parser.add_argument('--recon', default=False, type=bool,
                         help="Saving the reconstructed images during testing")

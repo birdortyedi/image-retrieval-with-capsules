@@ -26,8 +26,9 @@ def primary_capsule(inputs, dim_capsule, name, n_channels=32, kernel_size=7, str
 
 
 def capsule_model(inputs, args):
-    out = conv_bn_block(inputs, filters=64, k_size=7, stride=3, padding="valid", name="conv_block_1")
-    out = conv_bn_block(out, filters=128, k_size=5, stride=2, padding="valid", name="conv_block_2")
+    out = conv_bn_block(inputs, filters=64, k_size=7, stride=2, padding="same", name="conv_block_1")
+    out = conv_bn_block(out, filters=128, k_size=7, stride=2, padding="same", name="conv_block_2")
+    out = conv_bn_block(out, filters=64, k_size=7, stride=2, padding="same", name="conv_block_3")
     out = primary_capsule(out, dim_capsule=16, name="primarycaps")
     out = FashionCaps(num_capsule=args.num_class, dim_capsule=args.dim_capsule, routings=3, name="fashioncaps")(out)
     return out
