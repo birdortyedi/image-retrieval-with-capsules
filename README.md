@@ -1,25 +1,24 @@
 # image-retrieval-with-capsules
-In-Shop Fashion Image Retrieval with Siamese Capsule Networks
+Clothing Image Retrieval with Triplet Capsule Networks
 
 ## TODO LIST
 
 - [x] Literature search for clothing retrieval tasks
-- [x] Getting permission to data set
-- [x] Siamese directory iterator implementation
-- [x] Siamese capsules implementation
-- [x] Train/Gallery/Query 
+- [x] Getting permission for data set
+- [x] Triplet directory iterator implementation
+- [x] Triplet-based capsule network implementation
+- [x] Train/Gallery/Query partitioning
 - [x] Class partitioning
-- [x] Accuracy for Siamese Nets
+- [x] Triplet loss with Euclidean
+- [x] Triplet loss with Cosine (not used)
 - [x] Retrieval implementation
 - [x] Architecture design
 - [x] Starting the training process
-- [x] Literature search for related works
-- [x] Reconstruction
-- [ ] Log-euclidean distance metric
+- [x] Reconstruction or Regularization (not used)
 
 ## Project Details
 
-Keras (Backend: TF) implementation of FashionSiameseCapsNet
+Keras (Backend: TF) implementation of SCCapsNet and RCCapsNet
 
 Base code for Capsule architecture: [XifengGuo](https://github.com/XifengGuo/CapsNet-Keras), [birdortyedi](https://github.com/birdortyedi/fashion-caps-net)
 
@@ -39,4 +38,3 @@ Please feel free to open an issue or to send an e-mail to `furkan.kinli@ozyegin.
 
 ## Results
 
-## Reconstruction
