@@ -136,6 +136,7 @@ def test(model, args):
     for i in tqdm(range(len(query_dict["out"])), ncols=100, desc="Distance Calc",
                   bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Fore.RESET)):
         q_result = list()
+        # if np.argmax(query_dict["cls"][i]) == args.category or args.category == -1:
         for j in range(len(gallery_dict["out"])):
             if args.metric_type == "euclidean":
                 q_result.append({"is_same_cls": (np.argmax(query_dict["cls"][i]) == np.argmax(gallery_dict["cls"][j])),
@@ -190,6 +191,9 @@ def extract_embeddings(model, args, subset="query"):
     data_iterator = data_gen.flow_from_directory(directory=os.path.join(args.filepath, subset),
                                                  batch_size=args.batch_size,
                                                  shuffle=False)
+
+    if args.category != -1:
+        print(list(data_iterator.class_indices.keys())[list(data_iterator.class_indices.values()).index(args.category)])
 
     for i in tqdm(range(len(data_iterator)), ncols=100, desc=subset,
                   bar_format="{l_bar}%s{bar}%s{r_bar}" % (Fore.GREEN, Fore.RESET)):

@@ -5,6 +5,7 @@ import numpy as np
 import numpy.random as rng
 import os
 import re
+import cv2
 
 splitter = re.compile("\s+")
 
@@ -155,14 +156,14 @@ class TripletDirectoryIterator(image.DirectoryIterator):
                            landmark_info['8']['y']], dtype=K.floatx())
 
 
-class TripletDirectoryIterator2(image.DirectoryIterator):
+class TripletDirectoryIteratorForC2S(image.DirectoryIterator):
     def __init__(self, directory, image_data_generator,
                  bounding_boxes: dict = None, landmark_info: dict = None, attr_info: dict = None,
                  num_landmarks=26, num_attrs=463,
                  target_size=(256, 256), color_mode: str = 'rgb',
                  classes=None, class_mode: str = 'categorical',
                  batch_size: int = 32, shuffle: bool = True, seed=None, data_format=None,
-                 follow_links: bool = False, is_train: bool = True):
+                 follow_links: bool = False):
         super().__init__(directory, image_data_generator, target_size, color_mode, classes, class_mode, batch_size,
                          shuffle, seed, data_format, follow_links)
         self.bounding_boxes = bounding_boxes
@@ -178,15 +179,11 @@ class TripletDirectoryIterator2(image.DirectoryIterator):
             list_eval_partition = [line.rstrip('\n') for line in eval_partition_file][2:]
             list_eval_partition = [splitter.split(line) for line in list_eval_partition]
             # print(list_eval_partition)
-            if is_train:
-                for line in list_eval_partition:
-                    print(line)
-                    if line[3] == "train":
-                        self.pairs[line[0][4:]] = line[1][4:]
-            else:
-                for line in list_eval_partition:
-                    if line[3] == "test":
-                        self.pairs[line[0][4:]] = line[1][4:]
+            for line in list_eval_partition:
+                if line[3] == "train":
+                    key = line[0][4:][:2] + "_" + "/".join(line[0][4:].split("/")[1:])
+                    value = line[1][4:][:2] + "_" + "/".join(line[1][4:].split("/")[1:])
+                    self.pairs[key] = value
 
     def next(self):
         """
@@ -259,3 +256,70 @@ class TripletDirectoryIterator2(image.DirectoryIterator):
         # y = np.asarray([y_ for y_, s in zip(y, statements) if s]).reshape((self.batch_size,))
 
         return pairs, batch_y
+
+    @staticmethod
+    def shuffle_batches(batch_y, pairs):
+        anchor_img = pairs[0]
+        anchor_y = batch_y[0]
+        positive_img = pairs[1]
+        positive_y = batch_y[1]
+        negative_img = pairs[2]
+        negative_y = batch_y[2]
+        tmp = list(zip(anchor_img, positive_img, negative_img, anchor_y, positive_y, negative_y))
+        shuffle(tmp)
+        anchor_img, positive_img, negative_img, anchor_y, positive_y, negative_y = zip(*tmp)
+        pairs[0] = np.array(anchor_img)
+        pairs[1] = np.array(positive_img)
+        pairs[2] = np.array(negative_img)
+        batch_y[0] = np.array(anchor_y)
+        batch_y[1] = np.array(positive_y)
+        batch_y[2] = np.array(negative_y)
+
+    def get_image(self, idx):
+        fname = self.filenames[idx]
+        # print("Category: " + str(self.classes[idx_2]) + ", Filename: " + str(fname_2) + "\n")
+        img = image.load_img(os.path.join(self.directory, fname),
+                             grayscale=self.color_mode == 'grayscale')
+        img = image.img_to_array(img, data_format=self.data_format)
+        img = self.resize_w_aspect_ratio(img)
+        img = self.image_data_generator.random_transform(img)
+        img = self.image_data_generator.standardize(img)
+        return img
+
+    def resize_w_aspect_ratio(self, img):
+        old_size = img.shape[:2]  # old_size is in (height, width) format
+        ratio = float(self.target_size[0]) / max(old_size)
+        new_size = tuple([int(x * ratio) for x in old_size])
+        # new_size should be in (width, height) format
+        img = cv2.resize(img, (new_size[1], new_size[0]))
+        delta_w = self.target_size[0] - new_size[1]
+        delta_h = self.target_size[0] - new_size[0]
+        top, bottom = delta_h // 2, delta_h - (delta_h // 2)
+        left, right = delta_w // 2, delta_w - (delta_w // 2)
+        color = [234, 234, 234]
+        img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
+        return img
+
+    def get_bbox(self, fname):
+        bbox = self.bounding_boxes[fname]
+        return np.asarray([bbox['origin']['x'], bbox['origin']['y'], bbox['width'], bbox['height']], dtype=K.floatx())
+
+    def get_landmark_info(self, fname):
+        landmark_info = self.landmark_info[fname]
+        return np.asarray([landmark_info["clothes_type"], landmark_info["variation_type"],
+                           landmark_info['1']['visibility'], landmark_info['1']['x'],
+                           landmark_info['1']['y'],
+                           landmark_info['2']['visibility'], landmark_info['2']['x'],
+                           landmark_info['2']['y'],
+                           landmark_info['3']['visibility'], landmark_info['3']['x'],
+                           landmark_info['3']['y'],
+                           landmark_info['4']['visibility'], landmark_info['4']['x'],
+                           landmark_info['4']['y'],
+                           landmark_info['5']['visibility'], landmark_info['5']['x'],
+                           landmark_info['5']['y'],
+                           landmark_info['6']['visibility'], landmark_info['6']['x'],
+                           landmark_info['6']['y'],
+                           landmark_info['7']['visibility'], landmark_info['7']['x'],
+                           landmark_info['7']['y'],
+                           landmark_info['8']['visibility'], landmark_info['8']['x'],
+                           landmark_info['8']['y']], dtype=K.floatx())

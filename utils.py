@@ -63,11 +63,6 @@ def kl_divergence(y_true, y_pred):
         beta * kullback_leibler_divergence(anchor_encoding, (K.reverse(negative_encoding, axes=-1)))
 
 
-# TODO
-# def log_euclidean_dist(a, e):
-#     return 0
-
-
 def squash(activations, axis=-1):
     scale = K.sum(K.square(activations), axis, keepdims=True) / \
             (1 + K.sum(K.square(activations), axis, keepdims=True)) / \
@@ -100,22 +95,8 @@ def get_iterator(file_path, input_size=256, batch_size=32,
                                         rescale=1./255)
     t_iterator = TripletDirectoryIterator(directory=file_path, image_data_generator=data_gen,
                                           batch_size=batch_size, target_size=(input_size, input_size))
+    # t_iterator = TripletDirectoryIteratorForC2S(directory=file_path, image_data_generator=data_gen,
+    #                                           batch_size=batch_size, target_size=(input_size, input_size))
 
     return t_iterator
 
-
-def resize_img_aspect_ratio(image_path, size):
-    import cv2
-    im = cv2.imread(image_path)
-    old_size = im.shape[:2] # old_size is in (height, width) format
-    ratio = float(size)/max(old_size)
-    new_size = tuple([int(x*ratio) for x in old_size])
-    # new_size should be in (width, height) format
-    im = cv2.resize(im, (new_size[1], new_size[0]))
-    delta_w = size - new_size[1]
-    delta_h = size - new_size[0]
-    top, bottom = delta_h//2, delta_h-(delta_h//2)
-    left, right = delta_w//2, delta_w-(delta_w//2)
-    color = [234, 234, 234]
-    a = cv2.copyMakeBorder(im, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
-    return a

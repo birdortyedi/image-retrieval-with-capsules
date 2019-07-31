@@ -1,6 +1,6 @@
 from keras import backend as K
 from keras import layers, initializers, activations
-from utils import squash
+from utils import squash, custom_uniform
 import tensorflow as tf
 
 
@@ -44,7 +44,10 @@ class FashionCaps(layers.Layer):
         self.dim_capsule = dim_capsule
         self.routings = routings
         self.share_weights = share_weights
-        self.kernel_initializer = initializers.get(kernel_initializer)
+        if kernel_initializer == 'custom':
+            self.kernel_initializer = lambda shape: custom_uniform(shape)
+        else:
+            self.kernel_initializer = initializers.get(kernel_initializer)
         if activation == 'squash':
             self.activation = squash
         else:
@@ -85,6 +88,12 @@ class FashionCaps(layers.Layer):
             if i < self.routings - 1:
                 b = K.batch_dot(o, hat_inputs, [2, 3])
 
+        # # # AVARAJ ROUT # # #
+        # norm_hat_inputs = tf.norm(hat_inputs, axis=-1)
+        # weighted_hat_inputs = hat_inputs * tf.expand_dims(norm_hat_inputs, axis=-1)
+        # o = K.sum(weighted_hat_inputs, axis=2) / self.dim_capsule
+        # o = self.activation(o)
+
         return o
 
     def compute_output_shape(self, input_shape):
@@ -95,56 +104,5 @@ class FashionCaps(layers.Layer):
                   'dim_capsule': self.dim_capsule,
                   'routings': self.routings}
         base_config = super(FashionCaps, self).get_config()
-        new_config = list(base_config.items()) + list(config.items())
-        return dict(new_config)
-
-
-class FashionCapsOld(layers.Layer):
-    def __init__(self, num_capsule, dim_capsule, routings=3, kernel_initializer='glorot_uniform', **kwargs):
-        self.num_capsule = num_capsule
-        self.dim_capsule = dim_capsule
-        self.routings = routings
-        self.kernel_initializer = initializers.get(kernel_initializer)
-        super(FashionCapsOld, self).__init__(**kwargs)
-
-    def build(self, input_shape):
-        assert len(input_shape) >= 3
-        self.input_num_capsule = input_shape[1]
-        self.input_dim_capsule = input_shape[2]
-
-        # Transform matrix
-        self.W = self.add_weight(shape=[self.num_capsule, self.input_num_capsule,
-                                        self.dim_capsule, self.input_dim_capsule],
-                                 initializer=self.kernel_initializer,
-                                 name='W')
-        self.built = True
-
-    def call(self, inputs, training=None):
-        inputs = K.expand_dims(inputs, 1)
-        inputs = K.tile(inputs, [1, self.num_capsule, 1, 1])
-        inputs = K.map_fn(lambda x: K.batch_dot(x, self.W, [2, 3]), elems=inputs)
-
-        # Dynamic routing
-        b = tf.zeros(shape=[K.shape(inputs)[0], self.num_capsule, self.input_num_capsule])
-
-        assert self.routings > 0
-        for i in range(self.routings):
-            outputs = squash(K.batch_dot(tf.nn.softmax(b, dim=1), inputs, [2, 2]))
-
-            if i < self.routings - 1:
-                b += K.batch_dot(outputs, inputs, [2, 3])
-
-        return outputs
-
-    def compute_output_shape(self, input_shape):
-        return tuple([None, self.num_capsule, self.dim_capsule])
-
-    def get_config(self):
-        config = {
-            'num_capsule': self.num_capsule,
-            'dim_capsule': self.dim_capsule,
-            'routings': self.routings
-        }
-        base_config = super(FashionCaps, self).get_config
         new_config = list(base_config.items()) + list(config.items())
         return dict(new_config)
