@@ -32,9 +32,16 @@ Please feel free to open an issue or to send an e-mail to `furkan.kinli@ozyegin.
 
 ## Dependencies
 
+Will be added soon.
+
 ## Training
+
+Will be added soon.
 
 ## Testing
 
+Will be added soon.
+
 ## Results
 
+Will be added soon.

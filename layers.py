@@ -1,6 +1,6 @@
 from keras import backend as K
 from keras import layers, initializers, activations
-from utils import squash, custom_uniform
+from utils import squash
 import tensorflow as tf
 
 
@@ -44,10 +44,7 @@ class FashionCaps(layers.Layer):
         self.dim_capsule = dim_capsule
         self.routings = routings
         self.share_weights = share_weights
-        if kernel_initializer == 'custom':
-            self.kernel_initializer = lambda shape: custom_uniform(shape)
-        else:
-            self.kernel_initializer = initializers.get(kernel_initializer)
+        self.kernel_initializer = initializers.get(kernel_initializer)
         if activation == 'squash':
             self.activation = squash
         else:

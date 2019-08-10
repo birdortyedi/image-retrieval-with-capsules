@@ -4,13 +4,11 @@ import shutil
 from colorama import Fore
 from tqdm import tqdm
 import csv
-from PIL import Image
-import glob
 import numpy as np
 from keras.preprocessing import image
 
 splitter = re.compile("\s+")
-base_path = "./data_c2s/"  # "./data/"
+base_path = "./data/"
 
 
 def eval_partioner():
@@ -43,88 +41,6 @@ def eval_partioner():
             shutil.move(os.path.join(base_path, element[0]),
                         os.path.join(os.path.join(os.path.join(new_path, element[3]), element[4]+"_"+element[1]),
                                      element[2]))
-
-
-def eval_partioner_c2s():
-    data_path = "/home/birdortyedi/Downloads/"
-
-    # Read the relevant annotation file and preprocess it
-    # Assumed that the annotation files are under '<project folder>/data/anno' path
-    with open(os.path.join(base_path, 'Eval/list_eval_partition.txt'), 'r') as eval_partition_file:
-        list_eval_partition = [line.rstrip('\n') for line in eval_partition_file][2:]
-        list_eval_partition = [splitter.split(line) for line in list_eval_partition]
-        # print(list_eval_partition)
-        list_train = [(os.path.join(os.path.join(line[0].split('/')[0], line[3]), "/".join(line[0].split('/')[1:])),
-                       line[0], line[0].split('/')[4],
-                       os.path.join(os.path.join(line[1].split('/')[0], line[3]), "/".join(line[1].split('/')[1:])),
-                       line[1], line[1].split('/')[4], line[2], line[3])
-                      for line in list_eval_partition if line[3] == "train"]
-        # print(list_train)
-
-        list_test = [(os.path.join(os.path.join(line[0].split('/')[0], line[3]), "/".join(line[0].split('/')[1:])),
-                      line[0], line[0].split('/')[4],
-                      os.path.join(os.path.join(line[1].split('/')[0], line[3]), "/".join(line[1].split('/')[1:])),
-                      line[1], line[1].split('/')[4], line[2], line[3])
-                     for line in list_eval_partition if line[3] == "test"]
-        # print(list_test)
-
-    new_path = os.path.join(base_path, "img")
-    if not os.path.exists(new_path):
-        os.mkdir(new_path)
-
-    for element in list_test:
-        if not os.path.exists(os.path.join(new_path, "test")):
-            os.mkdir(os.path.join(new_path, "test"))
-
-        top_cat_1 = element[1].split('/')[1]
-        bot_cat_1 = element[1].split('/')[2]
-        idx_1 = element[1].split('/')[3]
-        top_cat_2 = element[4].split('/')[1]
-        bot_cat_2 = element[4].split('/')[2]
-        idx_2 = element[4].split('/')[3]
-
-        if not os.path.exists(os.path.join(os.path.join(new_path, "test"), top_cat_1)):
-            os.mkdir(os.path.join(os.path.join(new_path, "test"), top_cat_1))
-
-        if not os.path.exists(os.path.join(os.path.join(new_path, "test"), top_cat_2)):
-            os.mkdir(os.path.join(os.path.join(new_path, "test"), top_cat_2))
-
-        if not os.path.exists(os.path.join(os.path.join(os.path.join(os.path.join(new_path, "test"),
-                                                                     top_cat_1)),
-                                           bot_cat_1)):
-            os.mkdir(os.path.join(os.path.join(os.path.join(os.path.join(new_path, "test"),
-                                                            top_cat_1)),
-                                  bot_cat_1))
-
-        if not os.path.exists(os.path.join(os.path.join(os.path.join(os.path.join(new_path, "test"),
-                                                                     top_cat_2)),
-                                           bot_cat_2)):
-            os.mkdir(os.path.join(os.path.join(os.path.join(os.path.join(new_path, "test"),
-                                                            top_cat_2)),
-                                  bot_cat_2))
-
-        if not os.path.exists(os.path.join(os.path.join(os.path.join(os.path.join(os.path.join(new_path, "test"),
-                                                                                  top_cat_1)),
-                                                        bot_cat_1),
-                                           idx_1)):
-            os.mkdir(os.path.join(os.path.join(os.path.join(os.path.join(os.path.join(new_path, "test"),
-                                                                         top_cat_1)),
-                                               bot_cat_1),
-                                  idx_1))
-        if not os.path.exists(os.path.join(os.path.join(os.path.join(os.path.join(os.path.join(new_path, "test"),
-                                                                                  top_cat_2)),
-                                                        bot_cat_2),
-                                           idx_2)):
-            os.mkdir(os.path.join(os.path.join(os.path.join(os.path.join(os.path.join(new_path, "test"),
-                                                                         top_cat_2)),
-                                               bot_cat_2),
-                                  idx_2))
-
-        if not os.path.isfile(os.path.join(base_path, element[0])):
-            shutil.copy(os.path.join(data_path, element[1]), os.path.join(base_path, element[0]))
-
-        if not os.path.isfile(os.path.join(base_path, element[3])):
-            shutil.copy(os.path.join(data_path, element[4]), os.path.join(base_path, element[3]))
 
 
 def extract_neg_hard_pairs():
@@ -186,5 +102,4 @@ def extract_neg_hard_pairs():
 
 
 # eval_partioner()
-eval_partioner_c2s()
 # extract_neg_hard_pairs()
