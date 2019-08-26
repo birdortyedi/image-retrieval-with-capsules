@@ -1,7 +1,7 @@
 # image-retrieval-with-capsules
 Fashion Image Retrieval with Capsule Networks
 
-Accepted to the International Conference on Computer Vision, ICCV 2019, Workshop on Computer Vision for Fashion, Art and Design
+*Accepted to the International Conference on Computer Vision, ICCV 2019, Workshop on Computer Vision for Fashion, Art and Design*
 
 ![architecture][arch]
 
@@ -73,9 +73,7 @@ Environment:
 
 ## Quantitative Results
 
-Recall@K performance of the variants of the baseline study and our proposed model. 
-
-A: Number of attributes, L: Fashion landmarks, J: Human joints, P: Poselets
+* Recall@K performance of the variants of the baseline study and our proposed model. A: Number of attributes, L: Fashion landmarks, J: Human joints, P: Poselets
 
 | Models                 | Top-20 (%)         | Top-50 (%)         |
 | -------------          |:------------------:|:------------------:|
@@ -87,8 +85,7 @@ A: Number of attributes, L: Fashion landmarks, J: Human joints, P: Poselets
 | SCCapsNet *(ours)*     | 81.8               | 90.9               |
 | RCCapsNet *(ours)*     | 84.6               | 92.6               |
 
-Experimental results of in-shop clothing retrieval task on DeepFashion data set. 
-"-": not reported
+* Experimental results of in-shop clothing retrieval task on DeepFashion data set. "-": not reported
 
 | Models                 | Top-1 (%)          | Top-10 (%)         | Top-20 (%)         | Top-30 (%)         | Top-40 (%)         | Top-50 (%)         |
 | -------------          |:------------------:|:------------------:|:------------------:|:------------------:|:------------------:|:------------------:|
