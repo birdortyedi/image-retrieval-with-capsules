@@ -38,6 +38,23 @@ Environment:
 * 32 GB RAM 
 * 2 MSI GTX 1080 Ti Armor OC 11GB GPUs
 
+## Installation
+
+``` git clone git@github.com:birdortyedi/image-retrieval-with-capsules.git ```
+
+## Prerequisites
+
+Tested on Ubuntu 18.04 with:
+* Python 3.5
+* Tensorflow-gpu >= 1.14
+* Keras = 2.2.4
+* Keras-Applications = 1.0.8
+* Keras-Preprocessing = 1.1.0
+* numpy = 1.16.4
+* h5py = 2.8.0
+* colorama = 0.4.1
+* tqdm = 4.32.1
+
 ## Run
 
 ``` python main.py --model_type <rc or sc> --filepath <dataset_folder> --save_dir <results_folder>```
@@ -83,7 +100,7 @@ Environment:
 | FashionNet+1000A+P     | 70.0               | 75.0               |
 | FashionNet+1000A+L     | 76.4               | 80.0               |
 | SCCapsNet *(ours)*     | 81.8               | 90.9               |
-| RCCapsNet *(ours)*     | 84.6               | 92.6               |
+| RCCapsNet *(ours)*     | **84.6**           | **92.6**           |
 
 * Experimental results of in-shop clothing retrieval task on DeepFashion data set. "-": not reported
 
