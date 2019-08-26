@@ -60,7 +60,7 @@ Tested on Ubuntu 18.04 with:
 ``` python main.py --model_type <rc or sc> --filepath <dataset_folder> --save_dir <results_folder>```
 
 ## Implementation details
-##### Hyper-parameter settings
+#### Hyper-parameter settings
 
 | Hyper-parameter        | Value         |
 | -------------          |:-------------:|
@@ -71,7 +71,7 @@ Tested on Ubuntu 18.04 with:
 | Routings               | 3             |
 | Normalization          | Pixel-wise    |
 
-##### Augmentation
+#### Augmentation
 
 | Methods                | Range         |
 | -------------          |:-------------:|
@@ -91,7 +91,7 @@ Tested on Ubuntu 18.04 with:
 
 ## Quantitative Results
 
-##### Comparison with the baseline study
+#### Comparison with the baseline study
 
 * Recall@K performance of the variants of the baseline study and our proposed model. A: Number of attributes, L: Fashion landmarks, J: Human joints, P: Poselets
 
@@ -105,7 +105,7 @@ Tested on Ubuntu 18.04 with:
 | SCCapsNet *(ours)*     | 81.8               | 90.9               |
 | RCCapsNet *(ours)*     | **84.6**           | **92.6**           |
 
-##### Comparison with the SOTA methods
+#### Comparison with the SOTA methods
 
 * Experimental results of in-shop clothing retrieval task on DeepFashion data set. "-": not reported
 
