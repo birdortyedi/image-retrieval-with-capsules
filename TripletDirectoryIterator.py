@@ -5,7 +5,6 @@ import numpy as np
 import numpy.random as rng
 import os
 import re
-import cv2
 
 splitter = re.compile("\s+")
 

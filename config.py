@@ -3,11 +3,11 @@ import argparse
 
 def get_arguments():
     # Define all hyper-parameters
-    parser = argparse.ArgumentParser(description="FashionCapsNet")
+    parser = argparse.ArgumentParser(description="In-shop Image Retrieval with Capsule Networks")
 
     # INPUT & OUTPUT
     parser.add_argument('--filepath', default='./data/img/BOTH', type=str)
-    parser.add_argument('--save_dir', default='./results_inc_sq_euc')
+    parser.add_argument('--save_dir', default='./results_sq_euc')
 
     # MODEL ARCHITECTURE
     parser.add_argument('--num_class', default=23, type=int)

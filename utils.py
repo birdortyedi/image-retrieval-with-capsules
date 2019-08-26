@@ -95,8 +95,6 @@ def get_iterator(file_path, input_size=256, batch_size=32,
                                         rescale=1./255)
     t_iterator = TripletDirectoryIterator(directory=file_path, image_data_generator=data_gen,
                                           batch_size=batch_size, target_size=(input_size, input_size))
-    # t_iterator = TripletDirectoryIteratorForC2S(directory=file_path, image_data_generator=data_gen,
-    #                                           batch_size=batch_size, target_size=(input_size, input_size))
 
     return t_iterator
 

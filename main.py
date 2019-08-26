@@ -7,7 +7,7 @@ from keras import optimizers, callbacks
 from keras.preprocessing.image import ImageDataGenerator
 from keras import backend as K
 from config import get_arguments
-from models import FashionSiameseCapsNet, MultiGPUNet
+from models import FashionTripletCapsNet, MultiGPUNet
 from utils import custom_generator, get_iterator, triplet_eucliden_loss, triplet_cosine_loss, margin_loss
 
 
@@ -232,7 +232,7 @@ if __name__ == '__main__':
     if not os.path.exists(args.save_dir):
         os.mkdir(args.save_dir)
 
-    model, eval_model = FashionSiameseCapsNet(input_shape=(args.input_size, args.input_size, 3), args=args)
+    model, eval_model = FashionTripletCapsNet(input_shape=(args.input_size, args.input_size, 3), args=args)
 
     if args.weights is not None:
         model.load_weights(args.weights)

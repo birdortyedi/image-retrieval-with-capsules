@@ -22,7 +22,7 @@ class MultiGPUNet(models.Model):
         return super(MultiGPUNet, self).__getattribute__(attrname)
 
 
-def FashionSiameseCapsNet(input_shape, args):
+def FashionTripletCapsNet(input_shape, args):
     x = layers.Input(shape=input_shape)
 
     caps_model = models.Model(x, capsule_model(x, args))
@@ -56,12 +56,6 @@ def FashionSiameseCapsNet(input_shape, args):
     cls_out_anchor = Length(name="anchor_class")(anchor_encoding)
     cls_out_positive = Length(name="positive_class")(positive_encoding)
     cls_out_negative = Length(name="negative_class")(negative_encoding)
-
-    # z = layers.Input(shape=(args.num_class*args.dim_capsule,))
-    # decoder = models.Model(z, decoder_model(z))
-    # decoder.summary()
-    #
-    # anchor_decoding = decoder(masked_anchor_encoding)
 
     model = models.Model(inputs=[x1, x2, x3, y1],
                          outputs=[out, cls_out_anchor, cls_out_positive, cls_out_negative])
